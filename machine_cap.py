@@ -27,7 +27,6 @@ st.markdown("""
         margin-bottom: -15px;
     }
     
-    /* ซ่อนปุ่ม Print/Export ตอนที่สั่ง Print หน้าจอจริง ๆ เพื่อให้เอกสารดูสะอาดตา */
     @media print {
         .stPopover { display: none !important; }
         .stExpander { display: none !important; }
@@ -48,11 +47,9 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
-        # --- เพิ่ม Logic ตัดคำลงท้าย ;A1 และ ;A2 ออกจาก Material ---
         wip_fg['Material'] = wip_fg['Material'].astype(str)
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A1$', '', regex=True)
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A2$', '', regex=True)
-        # ------------------------------------------------------------
         
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
         
@@ -158,13 +155,11 @@ if "oee_dict" not in st.session_state:
 if "use_dict" not in st.session_state:
     st.session_state.use_dict = {row['Machine Type']: float(row['Usable Machines']) for _, row in cfg.iterrows()}
 
-# ปุ่ม Export Report มุมขวาบน
 with col_export:
     st.write("")
     st.write("")
     with st.popover("📥 Export Report"):
         st.markdown("**1. ส่งออกข้อมูลเป็น Excel**")
-        
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
@@ -180,7 +175,6 @@ with col_export:
         )
         st.divider()
         st.markdown("**2. ส่งออกหน้าเว็บพร้อมกราฟเป็น PDF**")
-        
         components.html(
             """
             <button onclick="window.parent.print()" style="
@@ -203,6 +197,9 @@ with col_export:
             height=110
         )
 
+# สร้าง List เก็บแจ้งเตือนเครื่องที่ใช้งานเกิน Total
+over_machines_alerts = []
+
 with st.expander("🎛️ แผงควบคุม: ปรับแต่งกะและ OEE รายเครื่องจักร (Easy Adjust)", expanded=False):
     st.markdown("##### 🔄 ปรับค่า OEE พร้อมกันทุกเครื่อง")
     b_col1, b_col2, b_col3 = st.columns([2, 2, 6])
@@ -216,7 +213,7 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
 
     h1, h2, h3, h4, h5 = st.columns([3.5, 1.5, 1.5, 1.5, 2.0])
     h1.write("**ประเภทเครื่องจักร**")
-    h2.write("**เครื่องทั้งหมด**")
+    h2.write("**Total**") # เปลี่ยนเป็น Total
     h3.write("**ใช้ได้ (ปรับ)**")
     h4.write("**กะการทำงาน**")
     h5.write("**OEE (%)**")
@@ -225,13 +222,18 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
     for idx, row in cfg.iterrows():
         c1, c2, c3, c4, c5 = st.columns([3.5, 1.5, 1.5, 1.5, 2.0])
         mt = row['Machine Type']
+        total_mach = int(row['Total Machines'])
         
         c1.write(f"🔧 {mt}")
-        c2.write(f"**{int(row['Total Machines'])}**")
+        c2.write(f"**{total_mach}**")
         
         current_use = st.session_state.use_dict.get(mt, float(row['Usable Machines']))
         use_val = c3.number_input("ใช้ได้", min_value=0.0, value=current_use, step=1.0, key=f"use_{idx}", label_visibility="collapsed")
         
+        # ถ้ายอดปรับมีค่ามากกว่า Total ให้เก็บแจ้งเตือน
+        if use_val > total_mach:
+            over_machines_alerts.append(f"- **{mt}** (มี {total_mach} แต่ปรับเป็น {int(use_val)})")
+            
         shift_val = c4.selectbox("กะ", [1.0, 1.5, 2.0, 3.0], index=3, key=f"sh_{idx}", label_visibility="collapsed")
         
         current_oee = st.session_state.oee_dict.get(mt, 85.0)
@@ -242,6 +244,10 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
         cfg.at[idx, 'Usable Machines'] = use_val
         cfg.at[idx, 'Shifts/Day'] = shift_val
         cfg.at[idx, 'OEE (%)'] = oee_val
+
+    # แสดงแจ้งเตือนด้านล่างของตาราง ถ้ามีเครื่องเกิน
+    if over_machines_alerts:
+        st.error("⚠️ **พบเครื่องที่ใช้งานเกินจำนวนทั้งหมดที่มี (Total):**\n" + "\n".join(over_machines_alerts))
 
 # ==========================================
 # 2. Calculation
