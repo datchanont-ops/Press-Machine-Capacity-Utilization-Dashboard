@@ -46,6 +46,15 @@ st.markdown("""
         padding-top: 0.1rem;
         padding-bottom: 0.1rem;
     }
+    
+    /* ซ่อน Scrollbar แนวตั้งสำหรับหน้าต่างแถบปรับตั้งค่า แต่ยังให้ Scroll ได้ */
+    ::-webkit-scrollbar {
+        height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -145,12 +154,15 @@ with st.sidebar:
     wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
 
 # ==========================================
-# Header & Export
+# Header & Placeholder for Export Button
 # ==========================================
 col_title, col_export = st.columns([4, 1])
 with col_title:
-    st.markdown("## 📊 Press Machine Capacity Utilization Dashboard")
+    st.markdown("## 📊 Press Capacity Utilization Dashboard")
     st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
+
+# จองพื้นที่สำหรับปุ่ม Export ไว้ก่อน (จะใส่เนื้อหาทีหลังเพื่อให้ได้ค่าอัปเดตล่าสุด)
+export_placeholder = col_export.empty()
 
 if not os.path.exists(db_file):
     st.error("⚠️ ไม่พบไฟล์ระบบ 'data base.xlsx' กรุณานำไฟล์ไปวางไว้ในโฟลเดอร์เดียวกับโปรแกรม")
@@ -189,10 +201,116 @@ if "use_dict" not in st.session_state:
 if "shift_dict" not in st.session_state:
     st.session_state.shift_dict = {row['Machine Type']: 3.0 for _, row in cfg.iterrows()}
 
-with col_export:
+# ==========================================
+# 2. KPI Cards (แบ่งเป็น 2 แถว แถวละ 4 ใบ รวม 8 ใบ)
+# ==========================================
+st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
+
+# แถวที่ 1 (4 ใบ)
+kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+ph1 = kpi1.empty()
+ph2 = kpi2.empty()
+ph3 = kpi3.empty()
+ph4 = kpi4.empty()
+
+st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+
+# แถวที่ 2 (4 ใบ)
+kpi5, kpi6, kpi7, kpi8 = st.columns(4)
+ph5 = kpi5.empty()
+ph6 = kpi6.empty()
+ph7 = kpi7.empty()
+ph8 = kpi8.empty()
+
+st.divider()
+
+# ==========================================
+# 3. Side-by-Side: Easy Adjust & Bar Chart
+# ==========================================
+col_adj, col_chart = st.columns([1.5, 2.5])
+over_machines_alerts = []
+
+with col_adj:
+    # 📌 นำกล่องปรับตั้งค่าและแจ้งเตือนมาไว้ใน Expander
+    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
+        
+        st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่าได้เลย (เลื่อนซ้าย-ขวาที่ชื่อเครื่องจักรได้ถ้ายาวเกินไป)")
+        
+        b_col1, b_col2 = st.columns([2, 1])
+        with b_col1:
+            bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่องพร้อมกัน (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
+        with b_col2:
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            if st.button("✨ อัปเดต", use_container_width=True):
+                for mt in cfg['Machine Type']:
+                    st.session_state.oee_dict[mt] = bulk_oee
+                st.rerun() 
+        
+        st.markdown("---")
+        
+        # 📌 ปรับสัดส่วนคอลัมน์ใหม่ (ให้ช่อง Machine กว้างขึ้นมาก)
+        h1, h2, h3, h4, h5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
+        h1.markdown("**Machine**")
+        h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
+        h3.markdown("**<div style='text-align:center;'>ใช้</div>**", unsafe_allow_html=True)
+        h4.markdown("**<div style='text-align:center;'>กะ</div>**", unsafe_allow_html=True)
+        h5.markdown("**<div style='text-align:center;'>OEE%</div>**", unsafe_allow_html=True)
+        
+        with st.container(height=350):
+            for idx, row in cfg.iterrows():
+                mt = row['Machine Type']
+                total_mach = int(row['Total Machines'])
+                
+                c1, c2, c3, c4, c5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
+                
+                # 📌 แสดงชื่อเครื่องจักร "เต็มรูปแบบ" ไม่มีการตัดทิ้ง และเลื่อนดูได้
+                c1.markdown(f"<div style='font-size: 13px; margin-top: 8px; white-space: nowrap; overflow-x: auto; padding-bottom: 2px;' title='{mt}'><b>{mt}</b></div>", unsafe_allow_html=True)
+                c2.markdown(f"<div style='font-size: 13px; margin-top: 8px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
+                
+                # ช่องปรับจำนวนเครื่องที่ใช้
+                current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
+                use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"u_{idx}", label_visibility="collapsed")
+                
+                # ช่องปรับกะ
+                shift_options = [1.0, 1.5, 2.0, 3.0]
+                current_shift = st.session_state.shift_dict.get(mt, 3.0)
+                shift_val = c4.selectbox("กะ", shift_options, index=shift_options.index(current_shift), key=f"s_{idx}", label_visibility="collapsed")
+                
+                # ช่องปรับ OEE
+                current_oee = st.session_state.oee_dict.get(mt, 85)
+                oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
+                
+                # บันทึกค่าลงระบบ (อัปเดตลงตัวแปร cfg ทันที)
+                st.session_state.use_dict[mt] = use_val
+                st.session_state.shift_dict[mt] = shift_val
+                st.session_state.oee_dict[mt] = oee_val
+                
+                cfg.at[idx, 'Usable Machines'] = use_val
+                cfg.at[idx, 'Shifts/Day'] = shift_val
+                cfg.at[idx, 'OEE (%)'] = oee_val
+                
+                if use_val > total_mach:
+                    short_mt = mt[:18] + ".." if len(mt) > 18 else mt
+                    over_machines_alerts.append(f"- **{short_mt}** (มี {total_mach} แต่ตั้ง {int(use_val)})")
+
+        if over_machines_alerts:
+            st.error("⚠️ **ใช้งานเครื่องจักรเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
+
+# --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม ---
+cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * work_days * (cfg['OEE (%)'] / 100.0))
+cfg['Available Hours'] = cfg['Usable Machines'] * cfg['Capacity_Per_Machine']
+cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] / cfg['Available Hours']) * 100.0, 0.0)
+cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
+
+# ==========================================
+# 📌 ปุ่ม Export (ดึงค่าที่อัปเดตแล้วมาสร้างไฟล์)
+# ==========================================
+with export_placeholder.container():
     st.write("")
     with st.popover("📥 Export Report"):
         st.markdown("**1. ส่งออกข้อมูลเป็น Excel**")
+        
+        # เขียนไฟล์ด้วยตัวแปร cfg (ที่เพิ่งรับค่าล่าสุดจากแผงควบคุมมาสดๆ ร้อนๆ)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
@@ -223,109 +341,6 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards (แบ่งเป็น 2 แถว)
-# ==========================================
-st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
-
-# แถวที่ 1 (4 ใบ)
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-ph1 = kpi1.empty()
-ph2 = kpi2.empty()
-ph3 = kpi3.empty()
-ph4 = kpi4.empty()
-
-st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-
-# แถวที่ 2 (3 ใบ)
-kpi5, kpi6, kpi7, kpi8 = st.columns(4) # สร้าง 4 คอลัมน์ แต่ใช้แค่ 3 ให้ขนาดเท่าแถวบน
-ph5 = kpi5.empty()
-ph6 = kpi6.empty()
-ph7 = kpi7.empty()
-
-st.divider()
-
-# ==========================================
-# 3. Side-by-Side: Easy Adjust & Bar Chart
-# ==========================================
-col_adj, col_chart = st.columns([1.5, 2.5])
-over_machines_alerts = []
-
-with col_adj:
-    # 📌 นำกล่องปรับตั้งค่าและตารางทั้งหมดมาซ่อนไว้ใน Expander เดียว
-    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
-        
-        st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่าได้ทันทีโดยไม่ต้องดับเบิ้ลคลิก")
-        
-        # จัดเรียงช่องกรอกข้อมูล และปุ่มกดให้ตรงกันสวยงาม
-        b_col1, b_col2 = st.columns([2, 1])
-        with b_col1:
-            bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่องพร้อมกัน (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
-        with b_col2:
-            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("✨ อัปเดต", use_container_width=True):
-                for mt in cfg['Machine Type']:
-                    st.session_state.oee_dict[mt] = bulk_oee
-                st.rerun() 
-        
-        st.markdown("---")
-        
-        # สร้างหัวตาราง (Header)
-        h1, h2, h3, h4, h5 = st.columns([2.5, 1, 1.5, 1.5, 1.5])
-        h1.markdown("**Machine**")
-        h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
-        h3.markdown("**<div style='text-align:center;'>ใช้</div>**", unsafe_allow_html=True)
-        h4.markdown("**<div style='text-align:center;'>กะ</div>**", unsafe_allow_html=True)
-        h5.markdown("**<div style='text-align:center;'>OEE%</div>**", unsafe_allow_html=True)
-        
-        # 📌 สร้างลูปกล่อง Input แบบดั้งเดิมที่กดง่ายกว่า (ไม่ต้องดับเบิ้ลคลิก)
-        with st.container(height=350):
-            for idx, row in cfg.iterrows():
-                mt = row['Machine Type']
-                total_mach = int(row['Total Machines'])
-                
-                c1, c2, c3, c4, c5 = st.columns([2.5, 1, 1.5, 1.5, 1.5])
-                
-                # ชื่อเครื่อง และ จำนวนที่มี
-                short_mt = mt[:18] + ".." if len(mt) > 18 else mt
-                c1.markdown(f"<div style='font-size: 13px; margin-top: 8px;' title='{mt}'><b>{short_mt}</b></div>", unsafe_allow_html=True)
-                c2.markdown(f"<div style='font-size: 13px; margin-top: 8px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
-                
-                # ช่องปรับจำนวนเครื่องที่ใช้
-                current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
-                use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"u_{idx}", label_visibility="collapsed")
-                
-                # ช่องปรับกะ
-                shift_options = [1.0, 1.5, 2.0, 3.0]
-                current_shift = st.session_state.shift_dict.get(mt, 3.0)
-                shift_val = c4.selectbox("กะ", shift_options, index=shift_options.index(current_shift), key=f"s_{idx}", label_visibility="collapsed")
-                
-                # ช่องปรับ OEE
-                current_oee = st.session_state.oee_dict.get(mt, 85)
-                oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
-                
-                # บันทึกค่าลงระบบ
-                st.session_state.use_dict[mt] = use_val
-                st.session_state.shift_dict[mt] = shift_val
-                st.session_state.oee_dict[mt] = oee_val
-                
-                cfg.at[idx, 'Usable Machines'] = use_val
-                cfg.at[idx, 'Shifts/Day'] = shift_val
-                cfg.at[idx, 'OEE (%)'] = oee_val
-                
-                if use_val > total_mach:
-                    over_machines_alerts.append(f"- **{short_mt}** (มี {total_mach} แต่ตั้ง {int(use_val)})")
-
-        # 📌 แจ้งเตือนจะถูกซ่อนอยู่ภายใน Expander นี้
-        if over_machines_alerts:
-            st.error("⚠️ **ใช้งานเครื่องจักรเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
-
-# --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม ---
-cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * work_days * (cfg['OEE (%)'] / 100.0))
-cfg['Available Hours'] = cfg['Usable Machines'] * cfg['Capacity_Per_Machine']
-cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] / cfg['Available Hours']) * 100.0, 0.0)
-cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
-
-# ==========================================
 # เติมค่าให้ KPI Cards (เรียงตาม 2 แถว)
 # ==========================================
 total_machines_all = 66
@@ -345,6 +360,7 @@ ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
+ph8.metric("🗓️ วันทำงาน", f"{int(work_days)} วัน")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
