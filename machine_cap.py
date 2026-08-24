@@ -85,14 +85,16 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         fo_n_col_amt = get_valid_col(data_fo, 'FO', '(AMT)', m_n_str, f'FO_AMT_{m_n_str}')
         ord_n_col_amt = get_valid_col(data_fo, 'ORD', '(AMT)', m_n_str, f'ORD_AMT_{m_n_str}')
 
-        df = data_fo[['Material', 'Description', fo_n_minus_1_col, ord_n_minus_1_col, fo_n_col, ord_n_col, fo_n1_col, ord_n1_col, fo_n_col_amt, ord_n_col_amt]].copy()
+        df = data_fo[['Material', 'Description', fo_n_minus_1_col, ord_n_minus_1_col, fo_n_col, ord_n_col, fo_n1_col, ord_n1_col]].copy()
         
         df['Max_N_minus_1'] = df[[fo_n_minus_1_col, ord_n_minus_1_col]].max(axis=1).fillna(0)
         df['Max_N'] = df[[fo_n_col, ord_n_col]].max(axis=1).fillna(0)
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
-        # คำนวณยอดขาย Amt เดือน N (ค่า Max ของ FO กับ ORD)
-        df['Max_N_Amt'] = df[[fo_n_col_amt, ord_n_col_amt]].max(axis=1).fillna(0)
+        # แก้ไข BUGS: ป้องกันการ Error และหา Max ของ Amt
+        fo_amt_series = pd.to_numeric(data_fo[fo_n_col_amt], errors='coerce').fillna(0)
+        ord_amt_series = pd.to_numeric(data_fo[ord_n_col_amt], errors='coerce').fillna(0)
+        df['Max_N_Amt'] = pd.DataFrame({'fo': fo_amt_series, 'ord': ord_amt_series}).max(axis=1)
         
         df = pd.merge(df, wip_agg, on='Material', how='left').fillna(0)
         df['Unrestricted'] = df['Unrestricted'] * (1 - (wip_reduction_pct / 100.0))
@@ -211,10 +213,12 @@ with col_export:
 # 2. KPI Cards
 # ==========================================
 total_req = cfg['Req_Hours'].sum()
-total_sales_n = df_detail['Max_N_Amt'].sum()
+
+# แก้ไข BUGS: Drop Duplicate ก่อนการบวกยอดขาย ป้องกันยอดเบิ้ลซ้ำเนื่องจากการวิ่งผ่านหลายเครื่องจักร
+total_sales_n = df_detail.drop_duplicates(subset=['Material'])['Max_N_Amt'].sum()
 
 kpi0, kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(6)
-kpi0.metric("💰 ยอดขายเดือน N (Amt)", f"{total_sales_n:,.0f}")
+kpi0.metric("💰 ยอดขายเดือน N", f"฿ {total_sales_n:,.0f}")
 kpi1.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 
 kpi_placeholder2 = kpi2.empty()
@@ -228,14 +232,12 @@ st.divider()
 # 3. Side-by-Side: Easy Adjust & Bar Chart
 # ==========================================
 col_adj, col_chart = st.columns([1.1, 2.9])
-
 over_machines_alerts = []
 
 with col_adj:
     st.markdown("#### 🎛️ ปรับแต่งกะ/OEE")
     
     b_col1, b_col2 = st.columns([1.5, 1])
-    # บังคับ format="%d" ตัดทศนิยม 100%
     bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, format="%d", label_visibility="collapsed")
     if b_col2.button("✨ อัปเดต", use_container_width=True):
         for mt in cfg['Machine Type']:
@@ -263,17 +265,14 @@ with col_adj:
             c2.markdown(f"<div style='font-size: 13px; margin-top: 5px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
             
             current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
-            # บังคับ format="%d" สำหรับจำนวนเครื่องจักร
             use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"use_{idx}", label_visibility="collapsed")
             
             if use_val > total_mach:
                 over_machines_alerts.append(f"- **{short_mt}** (มี {total_mach} แต่ตั้ง {int(use_val)})")
-            
-            # กะ ปรับให้เป็น 1, 1.5, 2, 3 (ไม่มี .0 สำหรับเลขเต็ม)
+                
             shift_val = c4.selectbox("กะ", [1, 1.5, 2, 3], index=3, key=f"sh_{idx}", label_visibility="collapsed")
             
             current_oee = st.session_state.oee_dict.get(mt, 85)
-            # บังคับ format="%d" สำหรับ OEE
             oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"oee_{idx}", label_visibility="collapsed")
             
             st.session_state.oee_dict[mt] = oee_val
