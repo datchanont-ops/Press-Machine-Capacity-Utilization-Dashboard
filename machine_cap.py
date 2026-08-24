@@ -56,7 +56,7 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
         
-        # --- ระบบค้นหาคอลัมน์อัจฉริยะ ---
+        # --- ระบบค้นหาคอลัมน์อัจฉริยะ สำหรับยอดชิ้นงาน (Pcs) ---
         fo_cols = [c for c in data_fo.columns if 'FO' in str(c).upper() and '(PCS)' in str(c).upper() and re.search(r'\d{2}\.\d{4}', str(c))]
         if len(fo_cols) >= 3:
             fo_cols.sort(key=lambda x: pd.to_datetime(re.search(r'\d{2}\.\d{4}', x).group(), format='%m.%Y'))
@@ -81,20 +81,17 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         fo_n1_col = get_valid_col(data_fo, 'FO', '(PCS)', m_n1_str, f'FO_PCS_{m_n1_str}')
         ord_n1_col = get_valid_col(data_fo, 'ORD', '(PCS)', m_n1_str, f'ORD_PCS_{m_n1_str}')
 
-        # ดึงยอดเงิน (Amt) สำหรับเดือน N
-        fo_n_col_amt = get_valid_col(data_fo, 'FO', '(AMT)', m_n_str, f'FO_AMT_{m_n_str}')
-        ord_n_col_amt = get_valid_col(data_fo, 'ORD', '(AMT)', m_n_str, f'ORD_AMT_{m_n_str}')
-
         df = data_fo[['Material', 'Description', fo_n_minus_1_col, ord_n_minus_1_col, fo_n_col, ord_n_col, fo_n1_col, ord_n1_col]].copy()
         
         df['Max_N_minus_1'] = df[[fo_n_minus_1_col, ord_n_minus_1_col]].max(axis=1).fillna(0)
         df['Max_N'] = df[[fo_n_col, ord_n_col]].max(axis=1).fillna(0)
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
-        # แก้ไข BUGS: ป้องกันการ Error และหา Max ของ Amt
-        fo_amt_series = pd.to_numeric(data_fo[fo_n_col_amt], errors='coerce').fillna(0)
-        ord_amt_series = pd.to_numeric(data_fo[ord_n_col_amt], errors='coerce').fillna(0)
-        df['Max_N_Amt'] = pd.DataFrame({'fo': fo_amt_series, 'ord': ord_amt_series}).max(axis=1)
+        # --- ดึงยอดขาย (Amt) เดือน N จากช่อง O (Index 14) โดยตรง ---
+        if len(data_fo.columns) >= 15:
+            df['Max_N_Amt'] = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
+        else:
+            df['Max_N_Amt'] = 0
         
         df = pd.merge(df, wip_agg, on='Material', how='left').fillna(0)
         df['Unrestricted'] = df['Unrestricted'] * (1 - (wip_reduction_pct / 100.0))
@@ -214,11 +211,11 @@ with col_export:
 # ==========================================
 total_req = cfg['Req_Hours'].sum()
 
-# แก้ไข BUGS: Drop Duplicate ก่อนการบวกยอดขาย ป้องกันยอดเบิ้ลซ้ำเนื่องจากการวิ่งผ่านหลายเครื่องจักร
+# Drop Duplicate ป้องกันยอดบวกเบิ้ลซ้ำเนื่องจาก 1 ชิ้นงานอาจต้องใช้หลายเครื่องจักร
 total_sales_n = df_detail.drop_duplicates(subset=['Material'])['Max_N_Amt'].sum()
 
 kpi0, kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(6)
-kpi0.metric("💰 ยอดขายเดือน N", f"฿ {total_sales_n:,.0f}")
+kpi0.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 kpi1.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 
 kpi_placeholder2 = kpi2.empty()
