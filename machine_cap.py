@@ -13,24 +13,77 @@ import io
 # ==========================================
 st.set_page_config(page_title="Press Capacity Dashboard", page_icon="🏭", layout="wide")
 
+# ==========================================
+# CSS Styling (สไตล์ทันสมัย ยุค 2024)
+# ==========================================
 st.markdown("""
 <style>
-    div[data-testid="metric-container"] {
-        background-color: #f8f9fa;
-        border: 1px solid #e0e0e0;
-        padding: 5% 5% 5% 10%;
-        border-radius: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-        border-left: 4px solid #1f77b4;
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Prompt', sans-serif !important;
     }
-    .stSelectbox, .stNumberInput {
-        margin-bottom: -15px;
+    
+    /* พื้นหลังหลักสไตล์ Light Theme */
+    .stApp {
+        background-color: #f8fafc !important;
     }
-    /* ปรับแต่งความกว้างของคอลัมน์ในแผง Easy Adjust ให้กระทัดรัดขึ้น */
+    
+    /* ปรับแต่งกล่อง Metric / KPI Cards */
+    [data-testid="stMetric"] {
+        background-color: #ffffff !important;
+        padding: 15px 20px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03) !important;
+        border: 1px solid #e2e8f0 !important;
+        border-top: 4px solid #3b82f6 !important; /* ค่า Default */
+        position: relative !important;
+    }
+    
+    /* กำหนดสีขอบบนให้การ์ดแต่ละใบ */
+    [data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-top-color: #64748b !important; } /* เครื่องทั้งหมด (เทา) */
+    [data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-top-color: #10b981 !important; } /* ตั้งค่า (เขียว) */
+    [data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-top-color: #3b82f6 !important; } /* ใช้จริง (น้ำเงิน) */
+    [data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-top-color: #8b5cf6 !important; } /* ชม. (ม่วง) */
+    [data-testid="column"]:nth-child(5) [data-testid="stMetric"] { border-top-color: #06b6d4 !important; } /* Util (ฟ้า) */
+    [data-testid="column"]:nth-child(6) [data-testid="stMetric"] { border-top-color: #ef4444 !important; } /* Over Cap (แดง) */
+    [data-testid="column"]:nth-child(7) [data-testid="stMetric"] { border-top-color: #f59e0b !important; } /* ยอดขาย (ส้ม) */
+
+    /* ข้อความหัวข้อในการ์ด */
+    [data-testid="stMetricLabel"] > div {
+        color: #64748b !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* ตัวเลขค่าสรุปในการ์ด */
+    [data-testid="stMetricValue"] > div {
+        color: #0f172a !important;
+        font-size: 26px !important;
+        font-weight: 700 !important;
+    }
+
+    /* ปรับตาราง */
+    div[data-testid="stDataFrame"] {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 5px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    
+    /* ซ่อนระยะห่างส่วนเกิน */
     div[data-testid="stVerticalBlock"] > div {
         padding-top: 0rem;
         padding-bottom: 0rem;
     }
+    
+    h1, h2, h3, h4 {
+        color: #1e293b !important;
+        font-weight: 700 !important;
+    }
+
+    /* ซ่อนตอน Print */
     @media print {
         .stPopover { display: none !important; }
         .stExpander { display: none !important; }
@@ -139,8 +192,12 @@ with st.sidebar:
 # ==========================================
 col_title, col_export = st.columns([4, 1])
 with col_title:
-    st.title("📊 Press Capacity Utilization Dashboard")
-    st.markdown("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
+    st.markdown("""
+        <div style="background-color: #ffffff; padding: 20px 28px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 20px;">
+            <h1 style="color: #1e293b; font-size: 28px; font-weight: 700; margin: 0;">📊 Press Capacity Utilization Dashboard</h1>
+            <p style="color: #64748b; font-size: 15px; margin-top: 5px; margin-bottom: 0;">ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 if not os.path.exists(db_file):
     st.error("⚠️ ไม่พบไฟล์ระบบ 'data base.xlsx' กรุณานำไฟล์ไปวางไว้ในโฟลเดอร์เดียวกับโปรแกรม")
@@ -181,7 +238,6 @@ if "shift_dict" not in st.session_state:
 
 with col_export:
     st.write("")
-    st.write("")
     with st.popover("📥 Export Report"):
         st.markdown("**1. ส่งออกข้อมูลเป็น Excel**")
         output = io.BytesIO()
@@ -214,7 +270,7 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards 
+# 2. KPI Cards
 # ==========================================
 kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
 ph1 = kpi1.empty()
@@ -234,10 +290,10 @@ col_adj, col_chart = st.columns([1.3, 2.7])
 over_machines_alerts = []
 
 with col_adj:
-    # 📌 รวมทุกอย่างในตั้งค่า (ปุ่มอัปเดต ตาราง และแจ้งเตือน) ให้อยู่ในกรอบซ่อนได้
+    # 📌 นำกล่องปรับตั้งค่าและตารางทั้งหมดมาซ่อนไว้ใน Expander เดียว
     with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อซ่อน/แสดง)", expanded=False):
         
-        st.markdown("💡 **คำแนะนำ:** คลิกช่องตัวเลขในตารางเพื่อพิมพ์แก้ หรือลากที่เส้นคั่นหัวตารางเพื่อย่อ/ขยาย")
+        st.markdown("<p style='font-size: 13px; color: #64748b;'>💡 <b>คำแนะนำ:</b> คลิกช่องตัวเลขในตารางเพื่อพิมพ์แก้ หรือลากที่เส้นคั่นหัวตารางเพื่อย่อ/ขยาย</p>", unsafe_allow_html=True)
         
         b_col1, b_col2 = st.columns([1.5, 1])
         bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, format="%d", label_visibility="collapsed")
@@ -312,7 +368,7 @@ overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-ph1.metric("⚙️ เครื่องพร้อมใช้", f"{total_machines_all} เครื่อง")
+ph1.metric("⚙️ เครื่องทั้งหมด", f"{total_machines_all} เครื่อง")
 ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
 ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
 ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
@@ -333,7 +389,7 @@ with col_chart:
     
     fig_bar.add_trace(go.Scatter(
         x=cfg['Machine Type'], y=cfg['OEE (%)'], mode='lines+markers', name="OEE (%)",
-        line=dict(color='#FF8C00', width=3, shape='spline'), 
+        line=dict(color='#3b82f6', width=3, shape='spline'), 
         marker=dict(size=8, symbol='diamond', line=dict(width=1, color='white')),
         hovertemplate="<b>%{x}</b><br>OEE: %{y:.1f}%<extra></extra>"
     ), secondary_y=True)
@@ -342,7 +398,7 @@ with col_chart:
                       annotation_text="Max Capacity 100%", annotation_position="top left",
                       annotation_font=dict(color="#EF553B", size=12), secondary_y=False)
     
-    fig_bar.update_layout(height=480, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
     fig_bar.update_yaxes(title_text="Utilization (%)", gridcolor='rgba(200,200,200,0.2)', secondary_y=False, rangemode='tozero')
@@ -357,14 +413,14 @@ st.divider()
 col_donut_all, col_donut_ind = st.columns([1, 3])
 
 def create_donut(title, util_val, height=220):
-    color = "#EF553B" if util_val > 100 else "#1f77b4"
+    color = "#EF553B" if util_val > 100 else "#10b981"
     visual_util = min(util_val, 100)
     remaining = max(100 - visual_util, 0)
     
     fig = go.Figure(data=[go.Pie(
         labels=['ใช้งานแล้ว', 'พื้นที่ว่าง'],
         values=[visual_util, remaining], hole=0.65,
-        marker=dict(colors=[color, '#e9ecef']), textinfo='none', hoverinfo='label'
+        marker=dict(colors=[color, '#e2e8f0']), textinfo='none', hoverinfo='label'
     )])
     
     font_size = 28 if height > 220 else 22
@@ -372,7 +428,7 @@ def create_donut(title, util_val, height=220):
     
     layout_args = dict(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=height, paper_bgcolor="rgba(0,0,0,0)")
     if title: 
-        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=15, color="#333333"))
+        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=15, color="#1e293b"))
         layout_args['margin']['t'] = 40
     fig.update_layout(**layout_args)
     return fig
@@ -400,7 +456,7 @@ with col_donut_ind:
         for idx, (index, data) in enumerate(row_df.iterrows()):
             with cols[idx]:
                 short_name = data['Machine Type'][:25] + ".." if len(data['Machine Type']) > 25 else data['Machine Type']
-                st.markdown(f"<div style='text-align: center; font-size: 13px; font-weight: bold; color: #333333;'>{short_name}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align: center; font-size: 13px; font-weight: 600; color: #1e293b;'>{short_name}</div>", unsafe_allow_html=True)
                 st.plotly_chart(create_donut("", data['Utilization (%)'], height=180), use_container_width=True)
 
 st.divider()
@@ -454,7 +510,7 @@ with col_deep2:
     df_down = df_trend[df_trend['% Change'] < -30].sort_values(by=['Req_Hours', '% Change'], ascending=[False, True]).head(8)
     
     def style_change(val):
-        color = '#00cc96' if val > 0 else '#EF553B' 
+        color = '#10b981' if val > 0 else '#ef4444' 
         return f'color: {color}; font-weight: bold'
     
     tab_up, tab_down = st.tabs(["🟢 แนวโน้มยอดเพิ่ม (Top 5 Up)", "🔴 แนวโน้มยอดลด (Top 5 Down)"])
