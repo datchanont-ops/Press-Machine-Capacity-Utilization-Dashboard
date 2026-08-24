@@ -235,8 +235,8 @@ with col_adj:
     st.markdown("#### 🎛️ ปรับแต่งกะ/OEE")
     
     b_col1, b_col2 = st.columns([1.5, 1])
-    # แก้ไขให้เป็นจำนวนเต็ม (Integer) ป้องกันการขึ้น .00
-    bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, label_visibility="collapsed")
+    # บังคับ format="%d" ตัดทศนิยม 100%
+    bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, format="%d", label_visibility="collapsed")
     if b_col2.button("✨ อัปเดต", use_container_width=True):
         for mt in cfg['Machine Type']:
             st.session_state.oee_dict[mt] = bulk_oee
@@ -263,17 +263,18 @@ with col_adj:
             c2.markdown(f"<div style='font-size: 13px; margin-top: 5px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
             
             current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
-            # แก้ไขให้รับเฉพาะค่าจำนวนเต็ม
-            use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, key=f"use_{idx}", label_visibility="collapsed")
+            # บังคับ format="%d" สำหรับจำนวนเครื่องจักร
+            use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"use_{idx}", label_visibility="collapsed")
             
             if use_val > total_mach:
                 over_machines_alerts.append(f"- **{short_mt}** (มี {total_mach} แต่ตั้ง {int(use_val)})")
-                
-            shift_val = c4.selectbox("กะ", [1.0, 1.5, 2.0, 3.0], index=3, key=f"sh_{idx}", label_visibility="collapsed")
+            
+            # กะ ปรับให้เป็น 1, 1.5, 2, 3 (ไม่มี .0 สำหรับเลขเต็ม)
+            shift_val = c4.selectbox("กะ", [1, 1.5, 2, 3], index=3, key=f"sh_{idx}", label_visibility="collapsed")
             
             current_oee = st.session_state.oee_dict.get(mt, 85)
-            # แก้ไขให้รับเฉพาะค่าจำนวนเต็ม
-            oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, key=f"oee_{idx}", label_visibility="collapsed")
+            # บังคับ format="%d" สำหรับ OEE
+            oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"oee_{idx}", label_visibility="collapsed")
             
             st.session_state.oee_dict[mt] = oee_val
             st.session_state.use_dict[mt] = use_val
