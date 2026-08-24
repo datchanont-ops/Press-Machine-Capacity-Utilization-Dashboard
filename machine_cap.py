@@ -14,74 +14,28 @@ import io
 st.set_page_config(page_title="Press Capacity Dashboard", page_icon="🏭", layout="wide")
 
 # ==========================================
-# CSS Styling (สไตล์ทันสมัย ยุค 2024)
+# CSS Styling (Clean & Modern Design)
 # ==========================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-    
-    * {
-        font-family: 'Prompt', sans-serif !important;
-    }
-    
-    /* พื้นหลังหลักสไตล์ Light Theme */
-    .stApp {
-        background-color: #f8fafc !important;
-    }
-    
-    /* ปรับแต่งกล่อง Metric / KPI Cards */
+    /* ปรับแต่งกล่อง KPI Cards ให้ดูสะอาดตาและมีมิติ */
     [data-testid="stMetric"] {
-        background-color: #ffffff !important;
-        padding: 15px 20px !important;
-        border-radius: 12px !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.03) !important;
-        border: 1px solid #e2e8f0 !important;
-        border-top: 4px solid #3b82f6 !important; /* ค่า Default */
-        position: relative !important;
-    }
-    
-    /* กำหนดสีขอบบนให้การ์ดแต่ละใบ */
-    [data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-top-color: #64748b !important; } /* เครื่องทั้งหมด (เทา) */
-    [data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-top-color: #10b981 !important; } /* ตั้งค่า (เขียว) */
-    [data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-top-color: #3b82f6 !important; } /* ใช้จริง (น้ำเงิน) */
-    [data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-top-color: #8b5cf6 !important; } /* ชม. (ม่วง) */
-    [data-testid="column"]:nth-child(5) [data-testid="stMetric"] { border-top-color: #06b6d4 !important; } /* Util (ฟ้า) */
-    [data-testid="column"]:nth-child(6) [data-testid="stMetric"] { border-top-color: #ef4444 !important; } /* Over Cap (แดง) */
-    [data-testid="column"]:nth-child(7) [data-testid="stMetric"] { border-top-color: #f59e0b !important; } /* ยอดขาย (ส้ม) */
-
-    /* ข้อความหัวข้อในการ์ด */
-    [data-testid="stMetricLabel"] > div {
-        color: #64748b !important;
-        font-size: 14px !important;
-        font-weight: 600 !important;
-    }
-    
-    /* ตัวเลขค่าสรุปในการ์ด */
-    [data-testid="stMetricValue"] > div {
-        color: #0f172a !important;
-        font-size: 26px !important;
-        font-weight: 700 !important;
-    }
-
-    /* ปรับตาราง */
-    div[data-testid="stDataFrame"] {
         background-color: #ffffff;
-        border-radius: 12px;
-        padding: 5px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 6px -1px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;
+        border-left: 6px solid #8b5cf6; /* สีพื้นฐาน */
     }
     
-    /* ซ่อนระยะห่างส่วนเกิน */
-    div[data-testid="stVerticalBlock"] > div {
-        padding-top: 0rem;
-        padding-bottom: 0rem;
-    }
-    
-    h1, h2, h3, h4 {
-        color: #1e293b !important;
-        font-weight: 700 !important;
-    }
+    /* ระบุสีแถบด้านซ้ายของการ์ดแต่ละใบ */
+    [data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-left-color: #8b5cf6; } /* เครื่องทั้งหมด */
+    [data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-left-color: #10b981; } /* ตั้งค่า */
+    [data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-left-color: #3b82f6; } /* ใช้จริง */
+    [data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-left-color: #f59e0b; } /* ชั่วโมง */
+    [data-testid="column"]:nth-child(5) [data-testid="stMetric"] { border-left-color: #06b6d4; } /* Util */
+    [data-testid="column"]:nth-child(6) [data-testid="stMetric"] { border-left-color: #ef4444; } /* Over Cap */
+    [data-testid="column"]:nth-child(7) [data-testid="stMetric"] { border-left-color: #14b8a6; } /* ยอดขาย */
 
     /* ซ่อนตอน Print */
     @media print {
@@ -109,7 +63,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
         
-        # --- ระบบค้นหาคอลัมน์อัจฉริยะ สำหรับยอดชิ้นงาน (Pcs) ---
         fo_cols = [c for c in data_fo.columns if 'FO' in str(c).upper() and '(PCS)' in str(c).upper() and re.search(r'\d{2}\.\d{4}', str(c))]
         if len(fo_cols) >= 3:
             fo_cols.sort(key=lambda x: pd.to_datetime(re.search(r'\d{2}\.\d{4}', x).group(), format='%m.%Y'))
@@ -126,7 +79,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
             df[fallback_name] = 0
             return fallback_name
 
-        # ดึงยอดชิ้นงาน (Pcs)
         fo_n_minus_1_col = get_valid_col(data_fo, 'FO', '(PCS)', m_minus_1_str, f'FO_PCS_{m_minus_1_str}')
         ord_n_minus_1_col = get_valid_col(data_fo, 'ORD', '(PCS)', m_minus_1_str, f'ORD_PCS_{m_minus_1_str}')
         fo_n_col = get_valid_col(data_fo, 'FO', '(PCS)', m_n_str, f'FO_PCS_{m_n_str}')
@@ -140,7 +92,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         df['Max_N'] = df[[fo_n_col, ord_n_col]].max(axis=1).fillna(0)
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
-        # --- ดึงยอดขาย (Amt) เดือน N จากช่อง O (Index 14) โดยตรง ---
         if len(data_fo.columns) >= 15:
             amt_series = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
             total_sales_n = amt_series.sum()
@@ -192,12 +143,8 @@ with st.sidebar:
 # ==========================================
 col_title, col_export = st.columns([4, 1])
 with col_title:
-    st.markdown("""
-        <div style="background-color: #ffffff; padding: 20px 28px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 20px;">
-            <h1 style="color: #1e293b; font-size: 28px; font-weight: 700; margin: 0;">📊 Press Capacity Utilization Dashboard</h1>
-            <p style="color: #64748b; font-size: 15px; margin-top: 5px; margin-bottom: 0;">ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📊 Press Capacity Utilization Dashboard")
+    st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
 
 if not os.path.exists(db_file):
     st.error("⚠️ ไม่พบไฟล์ระบบ 'data base.xlsx' กรุณานำไฟล์ไปวางไว้ในโฟลเดอร์เดียวกับโปรแกรม")
@@ -258,7 +205,7 @@ with col_export:
         components.html(
             """
             <button onclick="window.parent.print()" style="
-                background-color: #EF553B; border: none; color: white;
+                background-color: #3b82f6; border: none; color: white;
                 padding: 10px 20px; text-align: center; border-radius: 5px;
                 cursor: pointer; width: 100%; font-family: sans-serif;
                 font-weight: bold; font-size: 14px;
@@ -270,7 +217,7 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards
+# 2. KPI Cards 
 # ==========================================
 kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
 ph1 = kpi1.empty()
@@ -286,21 +233,25 @@ st.divider()
 # ==========================================
 # 3. Side-by-Side: Easy Adjust & Bar Chart
 # ==========================================
-col_adj, col_chart = st.columns([1.3, 2.7])
+col_adj, col_chart = st.columns([1.5, 2.5])
 over_machines_alerts = []
 
 with col_adj:
     # 📌 นำกล่องปรับตั้งค่าและตารางทั้งหมดมาซ่อนไว้ใน Expander เดียว
-    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อซ่อน/แสดง)", expanded=False):
+    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อแก้ไข)", expanded=False):
         
-        st.markdown("<p style='font-size: 13px; color: #64748b;'>💡 <b>คำแนะนำ:</b> คลิกช่องตัวเลขในตารางเพื่อพิมพ์แก้ หรือลากที่เส้นคั่นหัวตารางเพื่อย่อ/ขยาย</p>", unsafe_allow_html=True)
+        st.info("💡 **คำแนะนำ:** คลิกช่องตัวเลขในตารางเพื่อแก้ไขค่า หรือลากที่เส้นหัวตารางเพื่อย่อ/ขยาย")
         
-        b_col1, b_col2 = st.columns([1.5, 1])
-        bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, format="%d", label_visibility="collapsed")
-        if b_col2.button("✨ อัปเดต", use_container_width=True):
-            for mt in cfg['Machine Type']:
-                st.session_state.oee_dict[mt] = bulk_oee
-            st.rerun() 
+        # จัดเรียงช่องกรอกข้อมูล และปุ่มกดให้ตรงกันสวยงาม
+        b_col1, b_col2 = st.columns([2, 1])
+        with b_col1:
+            bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่องพร้อมกัน (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
+        with b_col2:
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True) # ดันปุ่มให้ตรงกับช่องกรอก
+            if st.button("✨ อัปเดต", use_container_width=True):
+                for mt in cfg['Machine Type']:
+                    st.session_state.oee_dict[mt] = bulk_oee
+                st.rerun() 
             
         editor_df = pd.DataFrame({
             'Machine': cfg['Machine Type'],
@@ -310,11 +261,9 @@ with col_adj:
             'OEE%': [st.session_state.oee_dict.get(mt, 85) for mt, row in cfg.iterrows()]
         })
 
-        # 📌 จัดกึ่งกลางเฉพาะคอลัมน์ที่เป็น "ตัวเลข"
+        # 📌 จัดกึ่งกลางเฉพาะคอลัมน์ที่เป็น "ตัวเลข" โดยใช้ Pandas Styler
         styled_df = editor_df.style.set_properties(
             subset=['มี', 'ใช้', 'กะ', 'OEE%'], **{'text-align': 'center'}
-        ).set_properties(
-            subset=['Machine'], **{'text-align': 'left'}
         ).set_table_styles([{
             'selector': 'th', 'props': [('text-align', 'center')]
         }])
@@ -333,6 +282,7 @@ with col_adj:
             height=420
         )
 
+        # อัปเดตค่าจากการแก้ไขตาราง
         for idx, row in edited_df.iterrows():
             mt = row['Machine']
             
@@ -348,9 +298,9 @@ with col_adj:
                 short_mt = mt[:18] + ".." if len(mt) > 18 else mt
                 over_machines_alerts.append(f"- **{short_mt}** (มี {row['มี']} แต่ตั้ง {int(row['ใช้'])})")
 
-        # 📌 แจ้งเตือนจะแสดงเมื่อเปิด Expander อยู่เท่านั้น (ถ้าปิดกล่องก็จะถูกซ่อนไปด้วย)
+        # 📌 แจ้งเตือนจะถูกซ่อนอยู่ภายใน Expander นี้ด้วย
         if over_machines_alerts:
-            st.error("⚠️ **ใช้งานเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
+            st.error("⚠️ **ใช้งานเครื่องจักรเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
 
 # --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม ---
 cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * work_days * (cfg['OEE (%)'] / 100.0))
@@ -377,9 +327,9 @@ ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 
 with col_chart:
-    st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE (Real-time)")
+    st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
     fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
-    bar_colors = ['#EF553B' if val > 100 else '#1f77b4' for val in cfg['Utilization (%)']]
+    bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
     fig_bar.add_trace(go.Bar(
         x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
@@ -389,14 +339,14 @@ with col_chart:
     
     fig_bar.add_trace(go.Scatter(
         x=cfg['Machine Type'], y=cfg['OEE (%)'], mode='lines+markers', name="OEE (%)",
-        line=dict(color='#3b82f6', width=3, shape='spline'), 
+        line=dict(color='#f59e0b', width=3, shape='spline'), 
         marker=dict(size=8, symbol='diamond', line=dict(width=1, color='white')),
         hovertemplate="<b>%{x}</b><br>OEE: %{y:.1f}%<extra></extra>"
     ), secondary_y=True)
     
-    fig_bar.add_hline(y=100, line_dash="dash", line_color="#EF553B", line_width=2, 
+    fig_bar.add_hline(y=100, line_dash="dash", line_color="#ef4444", line_width=2, 
                       annotation_text="Max Capacity 100%", annotation_position="top left",
-                      annotation_font=dict(color="#EF553B", size=12), secondary_y=False)
+                      annotation_font=dict(color="#ef4444", size=12), secondary_y=False)
     
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
@@ -413,7 +363,7 @@ st.divider()
 col_donut_all, col_donut_ind = st.columns([1, 3])
 
 def create_donut(title, util_val, height=220):
-    color = "#EF553B" if util_val > 100 else "#10b981"
+    color = "#ef4444" if util_val > 100 else "#10b981"
     visual_util = min(util_val, 100)
     remaining = max(100 - visual_util, 0)
     
