@@ -26,11 +26,6 @@ st.markdown("""
     .stSelectbox, .stNumberInput {
         margin-bottom: -15px;
     }
-    /* ปรับแต่งความกว้างของคอลัมน์ในแผง Easy Adjust ให้กระทัดรัดขึ้น */
-    div[data-testid="stVerticalBlock"] > div {
-        padding-top: 0rem;
-        padding-bottom: 0rem;
-    }
     @media print {
         .stPopover { display: none !important; }
         .stExpander { display: none !important; }
@@ -171,10 +166,13 @@ def get_sort_priority(machine_type):
 cfg['Sort_Priority'] = cfg['Machine Type'].apply(get_sort_priority)
 cfg = cfg.sort_values(by=['Sort_Priority', 'Machine Type']).reset_index(drop=True)
 
+# ประกาศตัวแปรเก็บค่าการปรับแต่ง (Session State)
 if "oee_dict" not in st.session_state:
     st.session_state.oee_dict = {mt: 85 for mt in cfg['Machine Type']}
 if "use_dict" not in st.session_state:
     st.session_state.use_dict = {row['Machine Type']: int(row['Usable Machines']) for _, row in cfg.iterrows()}
+if "shift_dict" not in st.session_state:
+    st.session_state.shift_dict = {row['Machine Type']: 3.0 for _, row in cfg.iterrows()}
 
 with col_export:
     st.write("")
@@ -211,22 +209,23 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards (ตั้งค่า Placeholder ไว้ก่อนคำนวณ)
+# 2. KPI Cards (ตั้งค่า 7 การ์ด ตามลำดับที่ร้องขอ)
 # ==========================================
-kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
 ph3 = kpi3.empty()
 ph4 = kpi4.empty()
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
+ph7 = kpi7.empty()
 
 st.divider()
 
 # ==========================================
 # 3. Side-by-Side: Easy Adjust & Bar Chart
 # ==========================================
-col_adj, col_chart = st.columns([1.1, 2.9])
+col_adj, col_chart = st.columns([1.3, 2.7])
 over_machines_alerts = []
 
 with col_adj:
@@ -239,42 +238,46 @@ with col_adj:
             st.session_state.oee_dict[mt] = bulk_oee
         st.rerun() 
         
-    st.caption("เลื่อนปรับตั้งค่ารายเครื่องจักร")
+    st.caption("คลิกในตารางเพื่อแก้ไขค่า (เอาเมาส์ลากขอบด้านบนเพื่อย่อขยายช่องได้)")
     
-    with st.container(height=420):
-        h1, h2, h3, h4, h5 = st.columns([2.5, 0.8, 1.2, 1.5, 1.5])
-        h1.write("**M/C**")
-        h2.write("**มี**")
-        h3.write("**ใช้**")
-        h4.write("**กะ**")
-        h5.write("**OEE**")
-        st.markdown("---")
+    # --- เปลี่ยนมาใช้ตาราง Data Editor ให้ยืดขยายคอลัมน์ได้ ---
+    editor_df = pd.DataFrame({
+        'Machine': cfg['Machine Type'],
+        'Total': cfg['Total Machines'].astype(int),
+        'ใช้': [st.session_state.use_dict.get(mt, int(row['Usable Machines'])) for mt, row in cfg.iterrows()],
+        'กะ': [st.session_state.shift_dict.get(mt, 3.0) for mt, row in cfg.iterrows()],
+        'OEE': [st.session_state.oee_dict.get(mt, 85) for mt, row in cfg.iterrows()]
+    })
+
+    edited_df = st.data_editor(
+        editor_df,
+        column_config={
+            "Machine": st.column_config.TextColumn("Machine", disabled=True),
+            "Total": st.column_config.NumberColumn("มี", disabled=True),
+            "ใช้": st.column_config.NumberColumn("ใช้", min_value=0, step=1),
+            "กะ": st.column_config.SelectboxColumn("กะ", options=[1.0, 1.5, 2.0, 3.0], required=True),
+            "OEE": st.column_config.NumberColumn("OEE%", min_value=1, max_value=100, step=1)
+        },
+        hide_index=True,
+        use_container_width=True,
+        height=420
+    )
+
+    # นำค่าที่แก้ไขในตารางไปอัปเดตระบบ
+    for idx, row in edited_df.iterrows():
+        mt = row['Machine']
         
-        for idx, row in cfg.iterrows():
-            c1, c2, c3, c4, c5 = st.columns([2.5, 0.8, 1.2, 1.5, 1.5])
-            mt = row['Machine Type']
-            total_mach = int(row['Total Machines'])
-            
-            short_mt = mt[:16] + ".." if len(mt) > 16 else mt
-            c1.markdown(f"<div style='font-size: 13px; margin-top: 5px;' title='{mt}'><b>{short_mt}</b></div>", unsafe_allow_html=True)
-            c2.markdown(f"<div style='font-size: 13px; margin-top: 5px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
-            
-            current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
-            use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"use_{idx}", label_visibility="collapsed")
-            
-            if use_val > total_mach:
-                over_machines_alerts.append(f"- **{short_mt}** (มี {total_mach} แต่ตั้ง {int(use_val)})")
-                
-            shift_val = c4.selectbox("กะ", [1, 1.5, 2, 3], index=3, key=f"sh_{idx}", label_visibility="collapsed")
-            
-            current_oee = st.session_state.oee_dict.get(mt, 85)
-            oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"oee_{idx}", label_visibility="collapsed")
-            
-            st.session_state.oee_dict[mt] = oee_val
-            st.session_state.use_dict[mt] = use_val
-            cfg.at[idx, 'Usable Machines'] = use_val
-            cfg.at[idx, 'Shifts/Day'] = shift_val
-            cfg.at[idx, 'OEE (%)'] = oee_val
+        st.session_state.use_dict[mt] = int(row['ใช้'])
+        st.session_state.shift_dict[mt] = float(row['กะ'])
+        st.session_state.oee_dict[mt] = int(row['OEE'])
+        
+        cfg.at[idx, 'Usable Machines'] = int(row['ใช้'])
+        cfg.at[idx, 'Shifts/Day'] = float(row['กะ'])
+        cfg.at[idx, 'OEE (%)'] = int(row['OEE'])
+        
+        if row['ใช้'] > row['Total']:
+            short_mt = mt[:18] + ".." if len(mt) > 18 else mt
+            over_machines_alerts.append(f"- **{short_mt}** (มี {row['Total']} แต่ตั้ง {int(row['ใช้'])})")
 
     if over_machines_alerts:
         st.error("⚠️ **ใช้งานเกิน Total:**\n" + "\n".join(over_machines_alerts))
@@ -286,20 +289,22 @@ cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] 
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
 # ==========================================
-# เติมค่าให้ KPI Cards (ตามลำดับที่ร้องขอ)
+# เติมค่าให้ KPI Cards 
 # ==========================================
+total_machines_all = int(cfg['Total Machines'].sum())
 total_req = cfg['Req_Hours'].sum()
 total_avail = cfg['Available Hours'].sum()
 overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-ph1.metric("⚙️ เครื่องที่ใช้จริง", f"{total_req_machines:.1f} เครื่อง")
+ph1.metric("⚙️ เครื่องทั้งหมด", f"{total_machines_all} เครื่อง")
 ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
-ph3.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
-ph4.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
-ph5.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
-ph6.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
+ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
+ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
+ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
+ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
+ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE (Real-time)")
@@ -413,7 +418,7 @@ with col_deep2:
     st.markdown("### 📈 Top 5 Parts (Trend 3 เดือน สวิง > 30%)")
     st.caption("ชิ้นงานที่กินชั่วโมงเครื่องจักรเยอะ (Req_Hours) และมียอดออเดอร์ (Pcs) สวิงเกิน 30%")
     
-    df_trend = df_detail[['Machine Type', 'Material', 'Max_N_minus_1', 'Max_N', 'Max_N1', 'Max_N_Amt', 'Req_Hours']].copy().drop_duplicates(subset=['Material'])
+    df_trend = df_detail[['Machine Type', 'Material', 'Max_N_minus_1', 'Max_N', 'Max_N1', 'Req_Hours']].copy().drop_duplicates(subset=['Material'])
     
     def calc_change_3m(row):
         if row['Max_N_minus_1'] == 0:
@@ -439,13 +444,13 @@ with col_deep2:
         return f'color: {color}; font-weight: bold'
     
     tab_up, tab_down = st.tabs(["🟢 แนวโน้มยอดเพิ่ม (Top 5 Up)", "🔴 แนวโน้มยอดลด (Top 5 Down)"])
-    disp_cols = ['Machine Type', 'Material', 'Max_N_Amt', 'Trend', '% Change', 'Req_Hours']
+    disp_cols = ['Machine Type', 'Material', 'Max_N_minus_1', 'Max_N', 'Max_N1', 'Trend', '% Change', 'Req_Hours']
     
     with tab_up:
         if not df_up.empty:
-            disp_up = df_up[disp_cols].rename(columns={'Max_N_Amt': 'ยอดขายเดือน N (Amt)'})
+            disp_up = df_up[disp_cols].rename(columns={'Max_N_minus_1': 'Mth N-1 (Pcs)', 'Max_N': 'Mth N (Pcs)', 'Max_N1': 'Mth N+1 (Pcs)'})
             st.dataframe(
-                disp_up.style.format({'ยอดขายเดือน N (Amt)': '{:,.0f}', '% Change': '{:+.1f}%', 'Req_Hours': '{:,.1f}'})
+                disp_up.style.format({'Mth N-1 (Pcs)': '{:,.0f}', 'Mth N (Pcs)': '{:,.0f}', 'Mth N+1 (Pcs)': '{:,.0f}', '% Change': '{:+.1f}%', 'Req_Hours': '{:,.1f}'})
                        .map(style_change, subset=['% Change']),
                 use_container_width=True, hide_index=True
             )
@@ -454,9 +459,9 @@ with col_deep2:
             
     with tab_down:
         if not df_down.empty:
-            disp_down = df_down[disp_cols].rename(columns={'Max_N_Amt': 'ยอดขายเดือน N (Amt)'})
+            disp_down = df_down[disp_cols].rename(columns={'Max_N_minus_1': 'Mth N-1 (Pcs)', 'Max_N': 'Mth N (Pcs)', 'Max_N1': 'Mth N+1 (Pcs)'})
             st.dataframe(
-                disp_down.style.format({'ยอดขายเดือน N (Amt)': '{:,.0f}', '% Change': '{:+.1f}%', 'Req_Hours': '{:,.1f}'})
+                disp_down.style.format({'Mth N-1 (Pcs)': '{:,.0f}', 'Mth N (Pcs)': '{:,.0f}', 'Mth N+1 (Pcs)': '{:,.0f}', '% Change': '{:+.1f}%', 'Req_Hours': '{:,.1f}'})
                        .map(style_change, subset=['% Change']),
                 use_container_width=True, hide_index=True
             )
