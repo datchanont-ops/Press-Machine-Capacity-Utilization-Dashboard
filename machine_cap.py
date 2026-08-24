@@ -7,6 +7,7 @@ import streamlit.components.v1 as components
 import os
 import re
 import io
+import datetime
 
 # ==========================================
 # Page Configuration
@@ -27,6 +28,7 @@ st.markdown("""
         margin-bottom: -15px;
     }
     
+    /* ซ่อนปุ่ม Print/Export ตอนที่สั่ง Print หน้าจอจริง ๆ เพื่อให้เอกสารดูสะอาดตา */
     @media print {
         .stPopover { display: none !important; }
         .stExpander { display: none !important; }
@@ -47,6 +49,7 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
+        # ตัด ;A1 และ ;A2 ออก
         wip_fg['Material'] = wip_fg['Material'].astype(str)
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A1$', '', regex=True)
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A2$', '', regex=True)
@@ -100,19 +103,37 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         return None, None, f"เกิดข้อผิดพลาดในการประมวลผล: {str(e)}"
 
 # ==========================================
-# Sidebar: Upload & Global Params
+# Sidebar: Upload & Configs
 # ==========================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2823/2823512.png", width=80)
     
     st.markdown("### 📂 1. อัปโหลดข้อมูลประจำเดือน")
     uploaded_up = st.file_uploader("ไฟล์ Data Upload (.xlsx)", type=["xlsx", "xls"])
+    
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
+    default_up_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data upload.xlsx')
 
+    if uploaded_up is not None:
+        if st.button("💾 บันทึกไฟล์นี้เป็นค่าเริ่มต้น (Save Default)", use_container_width=True):
+            with open(default_up_file, "wb") as f:
+                f.write(uploaded_up.getbuffer())
+            st.success("✅ บันทึกเป็นไฟล์เริ่มต้นเรียบร้อย! คราวหน้าไม่ต้องอัปโหลดซ้ำแล้วครับ")
+            st.rerun()
+
+    active_up_file = None
+    if uploaded_up is not None:
+        active_up_file = uploaded_up
+        st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
+    elif os.path.exists(default_up_file):
+        active_up_file = default_up_file
+        st.caption("📌 กำลังแสดงผลจาก: **ไฟล์ที่บันทึกไว้ในระบบ (Default)**")
+
+    st.markdown("---")
     st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
     work_days = st.number_input("วันทำงาน (วัน/เดือน)", min_value=1, max_value=31, value=23)
     wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
-
+    
 # ==========================================
 # Header & Export
 # ==========================================
@@ -125,11 +146,11 @@ if not os.path.exists(db_file):
     st.error("⚠️ ไม่พบไฟล์ระบบ 'data base.xlsx' กรุณานำไฟล์ไปวางไว้ในโฟลเดอร์เดียวกับโปรแกรม")
     st.stop()
     
-if uploaded_up is None:
-    st.info("👋 ยินดีต้อนรับ! กรุณาอัปโหลดไฟล์ **data upload.xlsx** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นวิเคราะห์ข้อมูล")
+if active_up_file is None:
+    st.info("👋 ยินดีต้อนรับ! กรุณาอัปโหลดไฟล์ **data upload.xlsx** ที่แถบด้านซ้ายมือเพื่อเริ่มต้นใช้งาน")
     st.stop()
 
-mach_summary, df_detail, err = load_and_process(db_file, uploaded_up, wip_reduction_pct)
+mach_summary, df_detail, err = load_and_process(db_file, active_up_file, wip_reduction_pct)
 if err:
     st.error(err)
     st.stop()
@@ -155,6 +176,7 @@ if "oee_dict" not in st.session_state:
 if "use_dict" not in st.session_state:
     st.session_state.use_dict = {row['Machine Type']: float(row['Usable Machines']) for _, row in cfg.iterrows()}
 
+# ปุ่ม Export Report มุมขวาบน
 with col_export:
     st.write("")
     st.write("")
@@ -190,14 +212,33 @@ with col_export:
                 font-weight: bold;
                 font-size: 14px;
             ">🖨️ Print / Save as PDF</button>
-            <p style="font-size:12px; color:gray; font-family:sans-serif; text-align:center; margin-top:10px;">
-            * แนะนำให้เปิดตัวเลือก <b>'Background graphics'</b> ในตั้งค่า Print ของเบราว์เซอร์เพื่อให้กราฟแสดงสีสันครบถ้วน
-            </p>
             """,
-            height=110
+            height=60
         )
 
-# สร้าง List เก็บแจ้งเตือนเครื่องที่ใช้งานเกิน Total
+# ==========================================
+# แถบเมนูด้านซ้าย: จัดเก็บรายงานรายเดือน
+# ==========================================
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 🗄️ เก็บประวัติรายงานรายเดือน")
+    report_month = st.text_input("ระบุเดือนที่ต้องการบันทึก", value=datetime.date.today().strftime("%Y-%m"), help="เช่น 2026-08")
+    
+    if st.button("💾 บันทึก Snapshot เข้าระบบ", use_container_width=True):
+        report_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'monthly_reports')
+        os.makedirs(report_dir, exist_ok=True)
+        
+        save_path = os.path.join(report_dir, f"Capacity_Report_{report_month}.xlsx")
+        
+        with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+            cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
+            df_detail.to_excel(writer, sheet_name='Part_Details', index=False)
+            
+        st.success(f"✅ บันทึกไฟล์สำเร็จเรียบร้อย!\n(จัดเก็บไว้ในโฟลเดอร์ monthly_reports)")
+
+# ==========================================
+# Easy Adjust Panel (แผงควบคุมง่าย)
+# ==========================================
 over_machines_alerts = []
 
 with st.expander("🎛️ แผงควบคุม: ปรับแต่งกะและ OEE รายเครื่องจักร (Easy Adjust)", expanded=False):
@@ -213,7 +254,7 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
 
     h1, h2, h3, h4, h5 = st.columns([3.5, 1.5, 1.5, 1.5, 2.0])
     h1.write("**ประเภทเครื่องจักร**")
-    h2.write("**Total**") # เปลี่ยนเป็น Total
+    h2.write("**Total**") 
     h3.write("**ใช้ได้ (ปรับ)**")
     h4.write("**กะการทำงาน**")
     h5.write("**OEE (%)**")
@@ -230,7 +271,6 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
         current_use = st.session_state.use_dict.get(mt, float(row['Usable Machines']))
         use_val = c3.number_input("ใช้ได้", min_value=0.0, value=current_use, step=1.0, key=f"use_{idx}", label_visibility="collapsed")
         
-        # ถ้ายอดปรับมีค่ามากกว่า Total ให้เก็บแจ้งเตือน
         if use_val > total_mach:
             over_machines_alerts.append(f"- **{mt}** (มี {total_mach} แต่ปรับเป็น {int(use_val)})")
             
@@ -245,7 +285,6 @@ with st.expander("🎛️ แผงควบคุม: ปรับแต่ง�
         cfg.at[idx, 'Shifts/Day'] = shift_val
         cfg.at[idx, 'OEE (%)'] = oee_val
 
-    # แสดงแจ้งเตือนด้านล่างของตาราง ถ้ามีเครื่องเกิน
     if over_machines_alerts:
         st.error("⚠️ **พบเครื่องที่ใช้งานเกินจำนวนทั้งหมดที่มี (Total):**\n" + "\n".join(over_machines_alerts))
 
