@@ -214,15 +214,16 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards
+# 2. KPI Cards 
 # ==========================================
-kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
 ph3 = kpi3.empty()
 ph4 = kpi4.empty()
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
+ph7 = kpi7.empty()
 
 st.divider()
 
@@ -233,8 +234,10 @@ col_adj, col_chart = st.columns([1.3, 2.7])
 over_machines_alerts = []
 
 with col_adj:
-    # 📌 นำกล่องปรับตั้งค่าและตารางทั้งหมดมาซ่อนไว้ใน Expander เดียว
-    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อแก้ไข)", expanded=False):
+    # 📌 รวมทุกอย่างในตั้งค่า (ปุ่มอัปเดต ตาราง และแจ้งเตือน) ให้อยู่ในกรอบซ่อนได้
+    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อซ่อน/แสดง)", expanded=False):
+        
+        st.markdown("💡 **คำแนะนำ:** คลิกช่องตัวเลขในตารางเพื่อพิมพ์แก้ หรือลากที่เส้นคั่นหัวตารางเพื่อย่อ/ขยาย")
         
         b_col1, b_col2 = st.columns([1.5, 1])
         bulk_oee = b_col1.number_input("OEE รวม(%)", value=85, min_value=1, max_value=100, step=1, format="%d", label_visibility="collapsed")
@@ -243,19 +246,17 @@ with col_adj:
                 st.session_state.oee_dict[mt] = bulk_oee
             st.rerun() 
             
-        st.caption("💡 แก้ตัวเลข: คลิกในช่อง / ย่อ-ขยาย: ลากเส้นหัวตาราง")
-        
         editor_df = pd.DataFrame({
             'Machine': cfg['Machine Type'],
-            'Total': cfg['Total Machines'].astype(int),
+            'มี': cfg['Total Machines'].astype(int),
             'ใช้': [st.session_state.use_dict.get(mt, int(row['Usable Machines'])) for mt, row in cfg.iterrows()],
             'กะ': [st.session_state.shift_dict.get(mt, 3.0) for mt, row in cfg.iterrows()],
             'OEE%': [st.session_state.oee_dict.get(mt, 85) for mt, row in cfg.iterrows()]
         })
 
-        # 📌 จัดกึ่งกลางให้เฉพาะคอลัมน์ที่เป็น "ตัวเลข" เท่านั้น (Machine จะอยู่ชิดซ้ายปกติ)
+        # 📌 จัดกึ่งกลางเฉพาะคอลัมน์ที่เป็น "ตัวเลข"
         styled_df = editor_df.style.set_properties(
-            subset=['Total', 'ใช้', 'กะ', 'OEE%'], **{'text-align': 'center'}
+            subset=['มี', 'ใช้', 'กะ', 'OEE%'], **{'text-align': 'center'}
         ).set_properties(
             subset=['Machine'], **{'text-align': 'left'}
         ).set_table_styles([{
@@ -266,7 +267,7 @@ with col_adj:
             styled_df,
             column_config={
                 "Machine": st.column_config.TextColumn("Machine", disabled=True),
-                "Total": st.column_config.NumberColumn("มี", disabled=True),
+                "มี": st.column_config.NumberColumn("มี", disabled=True),
                 "ใช้": st.column_config.NumberColumn("ใช้", min_value=0, step=1),
                 "กะ": st.column_config.SelectboxColumn("กะ", options=[1.0, 1.5, 2.0, 3.0], required=True),
                 "OEE%": st.column_config.NumberColumn("OEE%", min_value=1, max_value=100, step=1)
@@ -287,13 +288,13 @@ with col_adj:
             cfg.at[idx, 'Shifts/Day'] = float(row['กะ'])
             cfg.at[idx, 'OEE (%)'] = int(row['OEE%'])
             
-            if row['ใช้'] > row['Total']:
+            if row['ใช้'] > row['มี']:
                 short_mt = mt[:18] + ".." if len(mt) > 18 else mt
-                over_machines_alerts.append(f"- **{short_mt}** (มี {row['Total']} แต่ตั้ง {int(row['ใช้'])})")
+                over_machines_alerts.append(f"- **{short_mt}** (มี {row['มี']} แต่ตั้ง {int(row['ใช้'])})")
 
-    # ย้ายการแจ้งเตือน Error ออกมาด้านนอก เพื่อให้ยังมองเห็นได้แม้ Expander ปิดอยู่
-    if over_machines_alerts:
-        st.error("⚠️ **ใช้งานเกิน Total:**\n" + "\n".join(over_machines_alerts))
+        # 📌 แจ้งเตือนจะแสดงเมื่อเปิด Expander อยู่เท่านั้น (ถ้าปิดกล่องก็จะถูกซ่อนไปด้วย)
+        if over_machines_alerts:
+            st.error("⚠️ **ใช้งานเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
 
 # --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม ---
 cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * work_days * (cfg['OEE (%)'] / 100.0))
@@ -302,7 +303,7 @@ cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] 
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
 # ==========================================
-# เติมค่าให้ KPI Cards 
+# เติมค่าให้ KPI Cards
 # ==========================================
 total_machines_all = 66
 total_req = cfg['Req_Hours'].sum()
@@ -317,8 +318,7 @@ ph3.metric("🔥 เครื่องที่ต้องใช้จริง
 ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
-# ยอดขายไม่พอใส่ในการ์ด 6 ใบ (คอลัมน์เต็ม) ดังนั้นจะเพิ่มเข้าไปท้ายสุดหรือแสดงบน Header แทน 
-# ในที่นี้คงรูปแบบ 6 การ์ด แล้วใส่การ์ดที่ 7 กลับไปให้เพื่อให้ครบตามการเรียงของคุณ (ถ้าต้องการ)
+ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE (Real-time)")
