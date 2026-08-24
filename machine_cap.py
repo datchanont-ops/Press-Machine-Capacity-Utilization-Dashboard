@@ -209,16 +209,15 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards (ตั้งค่า Placeholder ไว้ก่อนคำนวณ)
+# 2. KPI Cards 
 # ==========================================
-kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
+kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
 ph3 = kpi3.empty()
 ph4 = kpi4.empty()
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
-ph7 = kpi7.empty()
 
 st.divider()
 
@@ -238,23 +237,22 @@ with col_adj:
             st.session_state.oee_dict[mt] = bulk_oee
         st.rerun() 
     
-    # 📌 สร้าง Expander เพื่อซ่อนข้อความคำแนะนำ
+    # ซ่อนคำแนะนำได้ด้วย Expander
     with st.expander("💡 คำแนะนำวิธีใช้งานตาราง (คลิกเพื่อซ่อน/แสดง)", expanded=False):
         st.markdown("""
         - **แก้ตัวเลข:** คลิกช่องตัวเลขในตารางเพื่อพิมพ์แก้ได้เลย
         - **ย่อ/ขยายคอลัมน์:** เอาเมาส์ชี้และลากที่เส้นคั่นระหว่างชื่อหัวตาราง
         """)
     
-    # ดึงค่ามาลง DataFrame
     editor_df = pd.DataFrame({
         'Machine': cfg['Machine Type'],
         'Total': cfg['Total Machines'].astype(int),
         'ใช้': [st.session_state.use_dict.get(mt, int(row['Usable Machines'])) for mt, row in cfg.iterrows()],
         'กะ': [st.session_state.shift_dict.get(mt, 3.0) for mt, row in cfg.iterrows()],
-        'OEE': [st.session_state.oee_dict.get(mt, 85) for mt, row in cfg.iterrows()]
+        'OEE%': [st.session_state.oee_dict.get(mt, 85) for mt, row in cfg.iterrows()]
     })
 
-    # 📌 ใช้ Styler เพื่อจัดข้อความให้อยู่ตรงกลาง (Text-align center)
+    # จัด Styler ให้อยู่ตรงกลาง
     styled_df = editor_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([{
         'selector': 'th',
         'props': [('text-align', 'center')]
@@ -267,7 +265,7 @@ with col_adj:
             "Total": st.column_config.NumberColumn("มี", disabled=True),
             "ใช้": st.column_config.NumberColumn("ใช้", min_value=0, step=1),
             "กะ": st.column_config.SelectboxColumn("กะ", options=[1.0, 1.5, 2.0, 3.0], required=True),
-            "OEE": st.column_config.NumberColumn("OEE%", min_value=1, max_value=100, step=1)
+            "OEE%": st.column_config.NumberColumn("OEE%", min_value=1, max_value=100, step=1)
         },
         hide_index=True,
         use_container_width=True,
@@ -279,11 +277,11 @@ with col_adj:
         
         st.session_state.use_dict[mt] = int(row['ใช้'])
         st.session_state.shift_dict[mt] = float(row['กะ'])
-        st.session_state.oee_dict[mt] = int(row['OEE'])
+        st.session_state.oee_dict[mt] = int(row['OEE%'])
         
         cfg.at[idx, 'Usable Machines'] = int(row['ใช้'])
         cfg.at[idx, 'Shifts/Day'] = float(row['กะ'])
-        cfg.at[idx, 'OEE (%)'] = int(row['OEE'])
+        cfg.at[idx, 'OEE (%)'] = int(row['OEE%'])
         
         if row['ใช้'] > row['Total']:
             short_mt = mt[:18] + ".." if len(mt) > 18 else mt
@@ -310,11 +308,10 @@ total_req_machines = cfg['Req_Machines'].sum()
 
 ph1.metric("⚙️ เครื่องพร้อมใช้", f"{total_machines_all} เครื่อง")
 ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
-ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
-ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
-ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
-ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
-ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
+ph3.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
+ph4.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
+ph5.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
+ph6.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE (Real-time)")
