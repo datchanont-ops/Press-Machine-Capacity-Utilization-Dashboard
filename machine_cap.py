@@ -88,10 +88,14 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
         # --- ดึงยอดขาย (Amt) เดือน N จากช่อง O (Index 14) โดยตรง ---
+        # ทำการรวมยอดจากไฟล์ต้นฉบับเลย เพื่อป้องกันยอดตกหล่นกรณีมี 1 Part หลายออเดอร์
         if len(data_fo.columns) >= 15:
-            df['Max_N_Amt'] = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
+            amt_series = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
+            total_sales_n = amt_series.sum()
+            df['Max_N_Amt'] = amt_series
         else:
             df['Max_N_Amt'] = 0
+            total_sales_n = 0
         
         df = pd.merge(df, wip_agg, on='Material', how='left').fillna(0)
         df['Unrestricted'] = df['Unrestricted'] * (1 - (wip_reduction_pct / 100.0))
@@ -112,9 +116,10 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         mach_summary = pd.merge(mach_summary, req_by_mach, on='Machine Type', how='left').fillna(0)
 
         df_detail = df[['Material', 'Description', 'Max_N_minus_1', 'Max_N', 'Max_N1', 'Max_N_Amt', 'Req_Qty', 'Semi Part', 'Machine Type', 'Req_Hours']].copy()
-        return mach_summary, df_detail, None
+        
+        return mach_summary, df_detail, total_sales_n, None
     except Exception as e:
-        return None, None, f"เกิดข้อผิดพลาดในการประมวลผล: {str(e)}"
+        return None, None, 0, f"เกิดข้อผิดพลาดในการประมวลผล: {str(e)}"
 
 # ==========================================
 # Sidebar: Upload & Global Params
@@ -146,7 +151,8 @@ if uploaded_up is None:
     st.info("👋 ยินดีต้อนรับ! กรุณาอัปโหลดไฟล์ **data upload.xlsx** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นวิเคราะห์ข้อมูล")
     st.stop()
 
-mach_summary, df_detail, err = load_and_process(db_file, uploaded_up, wip_reduction_pct)
+# รับค่า total_sales_n ที่คำนวณจากต้นฉบับมาโดยตรง
+mach_summary, df_detail, total_sales_n, err = load_and_process(db_file, uploaded_up, wip_reduction_pct)
 if err:
     st.error(err)
     st.stop()
@@ -210,9 +216,6 @@ with col_export:
 # 2. KPI Cards
 # ==========================================
 total_req = cfg['Req_Hours'].sum()
-
-# Drop Duplicate ป้องกันยอดบวกเบิ้ลซ้ำเนื่องจาก 1 ชิ้นงานอาจต้องใช้หลายเครื่องจักร
-total_sales_n = df_detail.drop_duplicates(subset=['Material'])['Max_N_Amt'].sum()
 
 kpi0, kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(6)
 kpi0.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
