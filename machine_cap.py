@@ -88,7 +88,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
         # --- ดึงยอดขาย (Amt) เดือน N จากช่อง O (Index 14) โดยตรง ---
-        # ทำการรวมยอดจากไฟล์ต้นฉบับเลย เพื่อป้องกันยอดตกหล่นกรณีมี 1 Part หลายออเดอร์
         if len(data_fo.columns) >= 15:
             amt_series = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
             total_sales_n = amt_series.sum()
@@ -151,7 +150,6 @@ if uploaded_up is None:
     st.info("👋 ยินดีต้อนรับ! กรุณาอัปโหลดไฟล์ **data upload.xlsx** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นวิเคราะห์ข้อมูล")
     st.stop()
 
-# รับค่า total_sales_n ที่คำนวณจากต้นฉบับมาโดยตรง
 mach_summary, df_detail, total_sales_n, err = load_and_process(db_file, uploaded_up, wip_reduction_pct)
 if err:
     st.error(err)
@@ -213,18 +211,15 @@ with col_export:
         )
 
 # ==========================================
-# 2. KPI Cards
+# 2. KPI Cards (ตั้งค่า Placeholder ไว้ก่อนคำนวณ)
 # ==========================================
-total_req = cfg['Req_Hours'].sum()
-
-kpi0, kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(6)
-kpi0.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
-kpi1.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
-
-kpi_placeholder2 = kpi2.empty()
-kpi_placeholder3 = kpi3.empty()
-kpi_placeholder4 = kpi4.empty()
-kpi_placeholder5 = kpi5.empty()
+kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+ph1 = kpi1.empty()
+ph2 = kpi2.empty()
+ph3 = kpi3.empty()
+ph4 = kpi4.empty()
+ph5 = kpi5.empty()
+ph6 = kpi6.empty()
 
 st.divider()
 
@@ -290,16 +285,21 @@ cfg['Available Hours'] = cfg['Usable Machines'] * cfg['Capacity_Per_Machine']
 cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] / cfg['Available Hours']) * 100.0, 0.0)
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
-# --- อัปเดต KPI ตัวที่เหลือ ---
+# ==========================================
+# เติมค่าให้ KPI Cards (ตามลำดับที่ร้องขอ)
+# ==========================================
+total_req = cfg['Req_Hours'].sum()
 total_avail = cfg['Available Hours'].sum()
 overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-kpi_placeholder2.metric("💡 เครื่องพร้อมใช้", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
-kpi_placeholder3.metric("⚙️ เครื่องที่ใช้จริง", f"{total_req_machines:.1f} เครื่อง")
-kpi_placeholder4.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
-kpi_placeholder5.metric("⚠️ เครื่องตึงตัว", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
+ph1.metric("⚙️ เครื่องที่ใช้จริง", f"{total_req_machines:.1f} เครื่อง")
+ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
+ph3.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
+ph4.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
+ph5.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
+ph6.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE (Real-time)")
