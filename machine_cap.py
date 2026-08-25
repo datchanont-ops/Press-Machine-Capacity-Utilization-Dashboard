@@ -7,6 +7,7 @@ import streamlit.components.v1 as components
 import os
 import re
 import io
+import json
 
 # ==========================================
 # Page Configuration
@@ -148,6 +149,7 @@ with st.sidebar:
     st.markdown("### 📂 1. อัปโหลดข้อมูลประจำเดือน")
     uploaded_up = st.file_uploader("ไฟล์ Data Upload (.xlsx)", type=["xlsx", "xls"])
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
+    settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'machine_settings.json')
 
     st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
     work_days = st.number_input("วันทำงาน (วัน/เดือน)", min_value=1, max_value=31, value=23)
@@ -161,7 +163,7 @@ with col_title:
     st.markdown("## 📊 Press Capacity Utilization Dashboard")
     st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
 
-# จองพื้นที่สำหรับปุ่ม Export ไว้ก่อน (จะใส่เนื้อหาทีหลังเพื่อให้ได้ค่าอัปเดตล่าสุด)
+# จองพื้นที่สำหรับปุ่ม Export ไว้ก่อน
 export_placeholder = col_export.empty()
 
 if not os.path.exists(db_file):
@@ -178,7 +180,7 @@ if err:
     st.stop()
 
 # ==========================================
-# 1. Custom Sorting & Setup
+# 1. Custom Sorting & Load Saved Settings
 # ==========================================
 cfg = mach_summary.copy()
 cfg['Hours/Shift'] = 7.0
@@ -193,16 +195,29 @@ def get_sort_priority(machine_type):
 cfg['Sort_Priority'] = cfg['Machine Type'].apply(get_sort_priority)
 cfg = cfg.sort_values(by=['Sort_Priority', 'Machine Type']).reset_index(drop=True)
 
-# ประกาศตัวแปรเก็บค่าการปรับแต่ง (Session State)
+# 📌 โหลดค่าที่เคยเซฟไว้จากไฟล์ JSON
+saved_settings = {}
+if os.path.exists(settings_file):
+    try:
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            saved_settings = json.load(f)
+    except:
+        pass
+
+saved_oee = saved_settings.get('oee_dict', {})
+saved_use = saved_settings.get('use_dict', {})
+saved_shift = saved_settings.get('shift_dict', {})
+
+# ประกาศตัวแปรเก็บค่าการปรับแต่ง (Session State) พร้อมดึงค่าที่เคยเซฟไว้มาใช้ (ถ้ามี)
 if "oee_dict" not in st.session_state:
-    st.session_state.oee_dict = {mt: 85 for mt in cfg['Machine Type']}
+    st.session_state.oee_dict = {mt: int(saved_oee.get(mt, 85)) for mt in cfg['Machine Type']}
 if "use_dict" not in st.session_state:
-    st.session_state.use_dict = {row['Machine Type']: int(row['Usable Machines']) for _, row in cfg.iterrows()}
+    st.session_state.use_dict = {row['Machine Type']: int(saved_use.get(row['Machine Type'], row['Usable Machines'])) for _, row in cfg.iterrows()}
 if "shift_dict" not in st.session_state:
-    st.session_state.shift_dict = {row['Machine Type']: 3.0 for _, row in cfg.iterrows()}
+    st.session_state.shift_dict = {row['Machine Type']: float(saved_shift.get(row['Machine Type'], 3.0)) for _, row in cfg.iterrows()}
 
 # ==========================================
-# 2. KPI Cards (แบ่งเป็น 2 แถว แถวละ 4 ใบ รวม 8 ใบ)
+# 2. KPI Cards (แบ่งเป็น 2 แถว แถวละ 4 ใบ)
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
 
@@ -234,17 +249,30 @@ with col_adj:
     # 📌 นำกล่องปรับตั้งค่าและแจ้งเตือนมาไว้ใน Expander
     with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
         
-        st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่าได้เลย (เลื่อนซ้าย-ขวาที่ชื่อเครื่องจักรได้ถ้ายาวเกินไป)")
+        st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่า และกด **บันทึกเป็นค่าเริ่มต้น** เพื่อจำค่าไว้ใช้ครั้งหน้า")
         
-        b_col1, b_col2 = st.columns([2, 1])
+        # จัดเรียงช่องกรอกข้อมูล และปุ่มกดให้ตรงกันสวยงาม
+        b_col1, b_col2, b_col3 = st.columns([1.5, 1, 1.2])
         with b_col1:
-            bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่องพร้อมกัน (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
+            bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่อง (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
         with b_col2:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             if st.button("✨ อัปเดต", use_container_width=True):
                 for mt in cfg['Machine Type']:
                     st.session_state.oee_dict[mt] = bulk_oee
                 st.rerun() 
+        with b_col3:
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            if st.button("💾 บันทึกค่า", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
+                # เขียนค่าปัจจุบันลงไฟล์ JSON
+                settings_data = {
+                    'oee_dict': st.session_state.oee_dict,
+                    'use_dict': st.session_state.use_dict,
+                    'shift_dict': st.session_state.shift_dict
+                }
+                with open(settings_file, 'w', encoding='utf-8') as f:
+                    json.dump(settings_data, f, ensure_ascii=False, indent=4)
+                st.toast("✅ บันทึกค่าที่ตั้งไว้เรียบร้อยแล้ว!")
         
         st.markdown("---")
         
