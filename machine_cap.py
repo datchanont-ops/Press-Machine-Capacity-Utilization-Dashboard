@@ -234,10 +234,11 @@ if "shift_dict" not in st.session_state:
     st.session_state.shift_dict = {row['Machine Type']: float(saved_shift.get(row['Machine Type'], 3.0)) for _, row in cfg.iterrows()}
 
 # ==========================================
-# 2. KPI Cards
+# 2. KPI Cards (เตรียม Placeholder)
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
 
+# แถวที่ 1 (4 ใบ)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -246,6 +247,7 @@ ph4 = kpi4.empty()
 
 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
+# แถวที่ 2 (4 ใบ)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
@@ -383,11 +385,18 @@ overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-ph1.metric("⚙️ เครื่องพร้อมใช้", f"{total_machines_all} เครื่อง")
-ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
+# 📌 คำนวณเครื่องพร้อมใช้ (ตั้งค่า) โดยเทียบสัดส่วนกะ (3 กะ = 1 เครื่องเต็ม)
+adj_mach_val = (cfg['Usable Machines'] * (cfg['Shifts/Day'] / 3.0)).sum()
+# เช็คถ้าทศนิยมเป็น .00 ให้ตัดทิ้ง ถ้าเป็น .5 หรือ .67 ให้คงไว้
+adj_mach_str = f"{adj_mach_val:.2f}".rstrip('0').rstrip('.') if '.' in f"{adj_mach_val:.2f}" else f"{adj_mach_val:.0f}"
+
+# แถว 1
+ph1.metric("⚙️ เครื่องทั้งหมด", f"{total_machines_all} เครื่อง")
+ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{adj_mach_str} เครื่อง")
 ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
 ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 
+# แถว 2
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
