@@ -182,7 +182,7 @@ with st.sidebar:
             with open(saved_up_file, "wb") as f:
                 f.write(uploaded_up.getbuffer())
             with open(data_settings_file, 'w', encoding='utf-8') as f:
-                json.dump({"work_days": work_days, "wip_reduction_pct": wip_reduction_pct}, f)
+                json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
             st.success("✅ บันทึกไฟล์และพารามิเตอร์เรียบร้อย!")
         st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
     elif os.path.exists(saved_up_file):
@@ -192,7 +192,7 @@ with st.sidebar:
         # ให้กดอัปเดตเฉพาะพารามิเตอร์ได้ถ้าไม่ได้อัปโหลดไฟล์ใหม่
         if st.button("💾 บันทึกเฉพาะพารามิเตอร์ใหม่", use_container_width=True):
             with open(data_settings_file, 'w', encoding='utf-8') as f:
-                json.dump({"work_days": work_days, "wip_reduction_pct": wip_reduction_pct}, f)
+                json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
             st.success("✅ บันทึกพารามิเตอร์เรียบร้อย!")
             
         if st.button("🗑️ ล้างข้อมูลไฟล์ที่บันทึกไว้", use_container_width=True):
@@ -306,12 +306,21 @@ with col_adj:
                 st.rerun() 
         with b_col3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            # 📌 แก้ไขปุ่มเซฟ: ดึงข้อมูลสดๆ จากหน้าจอ (st.session_state) แบบ Real-time เพื่อกันปัญหาการดึงค่าเก่าไปเซฟ
             if st.button("💾 บันทึกค่า", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
+                new_oee, new_use, new_shift, new_ot = {}, {}, {}, {}
+                for idx, row in cfg.iterrows():
+                    mt = row['Machine Type']
+                    new_use[mt] = int(st.session_state.get(f"u_{idx}", st.session_state.use_dict.get(mt, 0)))
+                    new_shift[mt] = float(st.session_state.get(f"s_{idx}", st.session_state.shift_dict.get(mt, 3.0)))
+                    new_oee[mt] = int(st.session_state.get(f"o_{idx}", st.session_state.oee_dict.get(mt, 85)))
+                    new_ot[mt] = int(st.session_state.get(f"ot_{idx}", st.session_state.ot_dict.get(mt, 0)))
+                
                 settings_data = {
-                    'oee_dict': st.session_state.oee_dict,
-                    'use_dict': st.session_state.use_dict,
-                    'shift_dict': st.session_state.shift_dict,
-                    'ot_dict': st.session_state.ot_dict
+                    'oee_dict': new_oee,
+                    'use_dict': new_use,
+                    'shift_dict': new_shift,
+                    'ot_dict': new_ot
                 }
                 with open(settings_file, 'w', encoding='utf-8') as f:
                     json.dump(settings_data, f, ensure_ascii=False, indent=4)
@@ -319,7 +328,7 @@ with col_adj:
         
         st.markdown("---")
         
-        # 📌 ปรับเพิ่มคอลัมน์ OT (+วัน)
+        # ปรับเพิ่มคอลัมน์ OT (+วัน)
         h1, h2, h3, h4, h5, h6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
@@ -348,7 +357,6 @@ with col_adj:
                 current_oee = st.session_state.oee_dict.get(mt, 85)
                 oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
                 
-                # 📌 ช่องกรอก OT พิเศษ (หน่วยเป็นวัน)
                 current_ot = st.session_state.ot_dict.get(mt, 0)
                 ot_val = c6.number_input("OT", min_value=0, max_value=31, value=int(current_ot), step=1, format="%d", key=f"ot_{idx}", label_visibility="collapsed")
                 
@@ -440,7 +448,6 @@ ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} �
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
-    # 📌 วาดกราฟบนแกน Y เดียวกัน (ไม่ใช้ secondary_y) เพื่อให้สเกลตรงกันเป๊ะ
     fig_bar = go.Figure()
     bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
@@ -464,7 +471,6 @@ with col_chart:
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
-    # แกน Y ใช้เปอร์เซ็นต์ร่วมกัน (ไม่มี secondary_y อีกต่อไป)
     fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
     st.plotly_chart(fig_bar, use_container_width=True)
 
