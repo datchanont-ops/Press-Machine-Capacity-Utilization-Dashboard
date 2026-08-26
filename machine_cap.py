@@ -171,7 +171,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
-    work_days = st.number_input("วันทำงาน (วัน/เดือน)", min_value=1, max_value=31, value=23)
+    work_days = st.number_input("วันทำงานปกติ (วัน/เดือน)", min_value=1, max_value=31, value=23)
     wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
 
 # ==========================================
@@ -213,7 +213,7 @@ def get_sort_priority(machine_type):
 cfg['Sort_Priority'] = cfg['Machine Type'].apply(get_sort_priority)
 cfg = cfg.sort_values(by=['Sort_Priority', 'Machine Type']).reset_index(drop=True)
 
-# 📌 โหลดค่าตั้งค่ากะ/OEE ที่เคยเซฟไว้
+# 📌 โหลดค่าตั้งค่ากะ/OEE/OT ที่เคยเซฟไว้
 saved_settings = {}
 if os.path.exists(settings_file):
     try:
@@ -225,6 +225,7 @@ if os.path.exists(settings_file):
 saved_oee = saved_settings.get('oee_dict', {})
 saved_use = saved_settings.get('use_dict', {})
 saved_shift = saved_settings.get('shift_dict', {})
+saved_ot = saved_settings.get('ot_dict', {})
 
 if "oee_dict" not in st.session_state:
     st.session_state.oee_dict = {mt: int(saved_oee.get(mt, 85)) for mt in cfg['Machine Type']}
@@ -232,6 +233,8 @@ if "use_dict" not in st.session_state:
     st.session_state.use_dict = {row['Machine Type']: int(saved_use.get(row['Machine Type'], row['Usable Machines'])) for _, row in cfg.iterrows()}
 if "shift_dict" not in st.session_state:
     st.session_state.shift_dict = {row['Machine Type']: float(saved_shift.get(row['Machine Type'], 3.0)) for _, row in cfg.iterrows()}
+if "ot_dict" not in st.session_state:
+    st.session_state.ot_dict = {row['Machine Type']: int(saved_ot.get(row['Machine Type'], 0)) for _, row in cfg.iterrows()}
 
 # ==========================================
 # 2. KPI Cards (เตรียม Placeholder)
@@ -259,13 +262,13 @@ st.divider()
 # ==========================================
 # 3. Side-by-Side: Easy Adjust & Bar Chart
 # ==========================================
-col_adj, col_chart = st.columns([1.5, 2.5])
+col_adj, col_chart = st.columns([1.7, 2.3])
 over_machines_alerts = []
 
 with col_adj:
-    with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
+    with st.expander("🎛️ แผงตั้งค่า กะ, OEE และ OT รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
         
-        st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่า และกด **บันทึกเป็นค่าเริ่มต้น** เพื่อจำค่าไว้ใช้ครั้งหน้า")
+        st.info("💡 **ลดภาระ Over Capacity:** ใส่เลขช่อง **OT (+วัน)** เพื่อเพิ่มวันทำงานให้เฉพาะเครื่องที่ล้น")
         
         b_col1, b_col2, b_col3 = st.columns([1.5, 1, 1.2])
         with b_col1:
@@ -282,7 +285,8 @@ with col_adj:
                 settings_data = {
                     'oee_dict': st.session_state.oee_dict,
                     'use_dict': st.session_state.use_dict,
-                    'shift_dict': st.session_state.shift_dict
+                    'shift_dict': st.session_state.shift_dict,
+                    'ot_dict': st.session_state.ot_dict
                 }
                 with open(settings_file, 'w', encoding='utf-8') as f:
                     json.dump(settings_data, f, ensure_ascii=False, indent=4)
@@ -290,19 +294,21 @@ with col_adj:
         
         st.markdown("---")
         
-        h1, h2, h3, h4, h5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
+        # 📌 ปรับเพิ่มคอลัมน์ OT (+วัน)
+        h1, h2, h3, h4, h5, h6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
         h3.markdown("**<div style='text-align:center;'>ใช้</div>**", unsafe_allow_html=True)
         h4.markdown("**<div style='text-align:center;'>กะ</div>**", unsafe_allow_html=True)
         h5.markdown("**<div style='text-align:center;'>OEE%</div>**", unsafe_allow_html=True)
+        h6.markdown("**<div style='text-align:center;'>OT(วัน)</div>**", unsafe_allow_html=True)
         
         with st.container(height=350):
             for idx, row in cfg.iterrows():
                 mt = row['Machine Type']
                 total_mach = int(row['Total Machines'])
                 
-                c1, c2, c3, c4, c5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
+                c1, c2, c3, c4, c5, c6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
                 
                 c1.markdown(f"<div style='font-size: 13px; margin-top: 8px; white-space: nowrap; overflow-x: auto; padding-bottom: 2px;' title='{mt}'><b>{mt}</b></div>", unsafe_allow_html=True)
                 c2.markdown(f"<div style='font-size: 13px; margin-top: 8px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
@@ -317,13 +323,19 @@ with col_adj:
                 current_oee = st.session_state.oee_dict.get(mt, 85)
                 oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
                 
+                # 📌 ช่องกรอก OT พิเศษ (หน่วยเป็นวัน)
+                current_ot = st.session_state.ot_dict.get(mt, 0)
+                ot_val = c6.number_input("OT", min_value=0, max_value=31, value=int(current_ot), step=1, format="%d", key=f"ot_{idx}", label_visibility="collapsed")
+                
                 st.session_state.use_dict[mt] = use_val
                 st.session_state.shift_dict[mt] = shift_val
                 st.session_state.oee_dict[mt] = oee_val
+                st.session_state.ot_dict[mt] = ot_val
                 
                 cfg.at[idx, 'Usable Machines'] = use_val
                 cfg.at[idx, 'Shifts/Day'] = shift_val
                 cfg.at[idx, 'OEE (%)'] = oee_val
+                cfg.at[idx, 'OT_Days'] = ot_val
                 
                 if use_val > total_mach:
                     short_mt = mt[:18] + ".." if len(mt) > 18 else mt
@@ -332,8 +344,8 @@ with col_adj:
         if over_machines_alerts:
             st.error("⚠️ **ใช้งานเครื่องจักรเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
 
-# --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม ---
-cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * work_days * (cfg['OEE (%)'] / 100.0))
+# --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม (บวก OT_Days เข้าไปในวันทำงาน) ---
+cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * (work_days + cfg['OT_Days'].fillna(0)) * (cfg['OEE (%)'] / 100.0))
 cfg['Available Hours'] = cfg['Usable Machines'] * cfg['Capacity_Per_Machine']
 cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] / cfg['Available Hours']) * 100.0, 0.0)
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
@@ -387,7 +399,6 @@ total_req_machines = cfg['Req_Machines'].sum()
 
 # 📌 คำนวณเครื่องพร้อมใช้ (ตั้งค่า) โดยเทียบสัดส่วนกะ (3 กะ = 1 เครื่องเต็ม)
 adj_mach_val = (cfg['Usable Machines'] * (cfg['Shifts/Day'] / 3.0)).sum()
-# เช็คถ้าทศนิยมเป็น .00 ให้ตัดทิ้ง ถ้าเป็น .5 หรือ .67 ให้คงไว้
 adj_mach_str = f"{adj_mach_val:.2f}".rstrip('0').rstrip('.') if '.' in f"{adj_mach_val:.2f}" else f"{adj_mach_val:.0f}"
 
 # แถว 1
@@ -400,7 +411,7 @@ ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
-ph8.metric("🗓️ วันทำงาน", f"{int(work_days)} วัน")
+ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} วัน")
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
