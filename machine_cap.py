@@ -148,9 +148,28 @@ with st.sidebar:
     
     st.markdown("### 📂 1. อัปโหลดข้อมูลประจำเดือน")
     uploaded_up = st.file_uploader("ไฟล์ Data Upload (.xlsx)", type=["xlsx", "xls"])
+    
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
+    saved_up_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_data_upload.xlsx')
     settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'machine_settings.json')
 
+    # 📌 ระบบจำไฟล์ข้อมูล (ไม่ต้องอัปโหลดซ้ำ)
+    active_file = None
+    if uploaded_up is not None:
+        active_file = uploaded_up
+        if st.button("💾 บันทึกไฟล์ข้อมูลนี้ไว้ใช้รอบหน้า", use_container_width=True):
+            with open(saved_up_file, "wb") as f:
+                f.write(uploaded_up.getbuffer())
+            st.success("✅ บันทึกไฟล์เรียบร้อย! รอบหน้าไม่ต้องอัปโหลดใหม่")
+        st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
+    elif os.path.exists(saved_up_file):
+        active_file = saved_up_file
+        st.caption("📌 กำลังแสดงผลจาก: **ไฟล์ที่บันทึกไว้ล่าสุด**")
+        if st.button("🗑️ ล้างข้อมูลไฟล์ที่บันทึกไว้", use_container_width=True):
+            os.remove(saved_up_file)
+            st.rerun()
+
+    st.markdown("---")
     st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
     work_days = st.number_input("วันทำงาน (วัน/เดือน)", min_value=1, max_value=31, value=23)
     wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
@@ -163,18 +182,17 @@ with col_title:
     st.markdown("## 📊 Press Capacity Utilization Dashboard")
     st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
 
-# จองพื้นที่สำหรับปุ่ม Export ไว้ก่อน
 export_placeholder = col_export.empty()
 
 if not os.path.exists(db_file):
     st.error("⚠️ ไม่พบไฟล์ระบบ 'data base.xlsx' กรุณานำไฟล์ไปวางไว้ในโฟลเดอร์เดียวกับโปรแกรม")
     st.stop()
     
-if uploaded_up is None:
+if active_file is None:
     st.info("👋 ยินดีต้อนรับ! กรุณาอัปโหลดไฟล์ **data upload.xlsx** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นวิเคราะห์ข้อมูล")
     st.stop()
 
-mach_summary, df_detail, total_sales_n, err = load_and_process(db_file, uploaded_up, wip_reduction_pct)
+mach_summary, df_detail, total_sales_n, err = load_and_process(db_file, active_file, wip_reduction_pct)
 if err:
     st.error(err)
     st.stop()
@@ -195,7 +213,7 @@ def get_sort_priority(machine_type):
 cfg['Sort_Priority'] = cfg['Machine Type'].apply(get_sort_priority)
 cfg = cfg.sort_values(by=['Sort_Priority', 'Machine Type']).reset_index(drop=True)
 
-# 📌 โหลดค่าที่เคยเซฟไว้จากไฟล์ JSON
+# 📌 โหลดค่าตั้งค่ากะ/OEE ที่เคยเซฟไว้
 saved_settings = {}
 if os.path.exists(settings_file):
     try:
@@ -208,7 +226,6 @@ saved_oee = saved_settings.get('oee_dict', {})
 saved_use = saved_settings.get('use_dict', {})
 saved_shift = saved_settings.get('shift_dict', {})
 
-# ประกาศตัวแปรเก็บค่าการปรับแต่ง (Session State) พร้อมดึงค่าที่เคยเซฟไว้มาใช้ (ถ้ามี)
 if "oee_dict" not in st.session_state:
     st.session_state.oee_dict = {mt: int(saved_oee.get(mt, 85)) for mt in cfg['Machine Type']}
 if "use_dict" not in st.session_state:
@@ -217,11 +234,10 @@ if "shift_dict" not in st.session_state:
     st.session_state.shift_dict = {row['Machine Type']: float(saved_shift.get(row['Machine Type'], 3.0)) for _, row in cfg.iterrows()}
 
 # ==========================================
-# 2. KPI Cards (แบ่งเป็น 2 แถว แถวละ 4 ใบ)
+# 2. KPI Cards
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
 
-# แถวที่ 1 (4 ใบ)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -230,7 +246,6 @@ ph4 = kpi4.empty()
 
 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
-# แถวที่ 2 (4 ใบ)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
@@ -246,12 +261,10 @@ col_adj, col_chart = st.columns([1.5, 2.5])
 over_machines_alerts = []
 
 with col_adj:
-    # 📌 นำกล่องปรับตั้งค่าและแจ้งเตือนมาไว้ใน Expander
     with st.expander("🎛️ แผงตั้งค่า กะและ OEE รายเครื่องจักร (คลิกเพื่อเปิด/ปิด)", expanded=False):
         
         st.info("💡 **กดปุ่ม + / -** ในช่องเพื่อเพิ่มลดค่า และกด **บันทึกเป็นค่าเริ่มต้น** เพื่อจำค่าไว้ใช้ครั้งหน้า")
         
-        # จัดเรียงช่องกรอกข้อมูล และปุ่มกดให้ตรงกันสวยงาม
         b_col1, b_col2, b_col3 = st.columns([1.5, 1, 1.2])
         with b_col1:
             bulk_oee = st.number_input("🔄 ปรับ OEE ทุกเครื่อง (%)", value=85, min_value=1, max_value=100, step=1, format="%d")
@@ -264,7 +277,6 @@ with col_adj:
         with b_col3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             if st.button("💾 บันทึกค่า", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
-                # เขียนค่าปัจจุบันลงไฟล์ JSON
                 settings_data = {
                     'oee_dict': st.session_state.oee_dict,
                     'use_dict': st.session_state.use_dict,
@@ -276,7 +288,6 @@ with col_adj:
         
         st.markdown("---")
         
-        # 📌 ปรับสัดส่วนคอลัมน์ใหม่ (ให้ช่อง Machine กว้างขึ้นมาก)
         h1, h2, h3, h4, h5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
@@ -291,24 +302,19 @@ with col_adj:
                 
                 c1, c2, c3, c4, c5 = st.columns([3.5, 1, 1.2, 1.2, 1.2])
                 
-                # 📌 แสดงชื่อเครื่องจักร "เต็มรูปแบบ" ไม่มีการตัดทิ้ง และเลื่อนดูได้
                 c1.markdown(f"<div style='font-size: 13px; margin-top: 8px; white-space: nowrap; overflow-x: auto; padding-bottom: 2px;' title='{mt}'><b>{mt}</b></div>", unsafe_allow_html=True)
                 c2.markdown(f"<div style='font-size: 13px; margin-top: 8px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
                 
-                # ช่องปรับจำนวนเครื่องที่ใช้
                 current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
                 use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"u_{idx}", label_visibility="collapsed")
                 
-                # ช่องปรับกะ
                 shift_options = [1.0, 1.5, 2.0, 3.0]
                 current_shift = st.session_state.shift_dict.get(mt, 3.0)
                 shift_val = c4.selectbox("กะ", shift_options, index=shift_options.index(current_shift), key=f"s_{idx}", label_visibility="collapsed")
                 
-                # ช่องปรับ OEE
                 current_oee = st.session_state.oee_dict.get(mt, 85)
                 oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
                 
-                # บันทึกค่าลงระบบ (อัปเดตลงตัวแปร cfg ทันที)
                 st.session_state.use_dict[mt] = use_val
                 st.session_state.shift_dict[mt] = shift_val
                 st.session_state.oee_dict[mt] = oee_val
@@ -338,7 +344,6 @@ with export_placeholder.container():
     with st.popover("📥 Export Report"):
         st.markdown("**1. ส่งออกข้อมูลเป็น Excel**")
         
-        # เขียนไฟล์ด้วยตัวแปร cfg (ที่เพิ่งรับค่าล่าสุดจากแผงควบคุมมาสดๆ ร้อนๆ)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
@@ -369,7 +374,7 @@ with export_placeholder.container():
         )
 
 # ==========================================
-# เติมค่าให้ KPI Cards (เรียงตาม 2 แถว)
+# เติมค่าให้ KPI Cards 
 # ==========================================
 total_machines_all = 66
 total_req = cfg['Req_Hours'].sum()
@@ -378,13 +383,11 @@ overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-# แถว 1
 ph1.metric("⚙️ เครื่องพร้อมใช้", f"{total_machines_all} เครื่อง")
 ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{int(cfg['Usable Machines'].sum())} เครื่อง")
 ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
 ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 
-# แถว 2
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
