@@ -494,7 +494,13 @@ with col_donut_ind:
             with cols[idx]:
                 short_name = data['Machine Type'][:25] + ".." if len(data['Machine Type']) > 25 else data['Machine Type']
                 st.markdown(f"<div style='text-align: center; font-size: 13px; font-weight: 600; color: #1e293b;'>{short_name}</div>", unsafe_allow_html=True)
-                st.plotly_chart(create_donut("", data['Utilization (%)'], height=180), use_container_width=True)
+                
+                # 📌 ใส่ key เพื่อแก้ปัญหา DuplicateElementId
+                st.plotly_chart(
+                    create_donut("", data['Utilization (%)'], height=180), 
+                    use_container_width=True, 
+                    key=f"donut_{index}"
+                )
 
 st.divider()
 
