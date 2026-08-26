@@ -14,7 +14,6 @@ import json
 # ==========================================
 st.set_page_config(page_title="Press Capacity Dashboard", page_icon="🏭", layout="wide")
 
-# ตัวแปรควบคุมการ Save ทั้งหน้า
 trigger_save = False
 
 # ==========================================
@@ -22,43 +21,30 @@ trigger_save = False
 # ==========================================
 st.markdown("""
 <style>
-    /* ปรับแต่งกล่อง KPI Cards ให้ดูสะอาดตาและมีมิติ */
     [data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 15px 20px;
         border-radius: 8px;
         box-shadow: 0px 4px 6px -1px rgba(0,0,0,0.1);
         border: 1px solid #e0e0e0;
-        border-left: 5px solid #3b82f6; /* สีน้ำเงินมาตรฐาน */
+        border-left: 5px solid #3b82f6; 
     }
-    
-    /* ปรับให้ขอบซ้ายการ์ดแต่ละแถวมีสีแตกต่างกันเพื่อให้ดูง่าย */
     div[data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-left-color: #8b5cf6; } 
     div[data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-left-color: #10b981; }
     div[data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-left-color: #f59e0b; }
     div[data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-left-color: #ef4444; }
 
-    /* ซ่อนตอน Print */
     @media print {
         .stPopover { display: none !important; }
         .stExpander { display: none !important; }
         header { display: none !important; }
     }
-    
-    /* ปรับลดช่องว่างแนวตั้งในแผงปรับตั้งค่า */
     div[data-testid="stVerticalBlock"] > div {
         padding-top: 0.1rem;
         padding-bottom: 0.1rem;
     }
-    
-    /* ซ่อน Scrollbar แนวตั้งสำหรับหน้าต่างแถบปรับตั้งค่า แต่ยังให้ Scroll ได้ */
-    ::-webkit-scrollbar {
-        height: 6px;
-    }
-    ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; 
-        border-radius: 10px;
-    }
+    ::-webkit-scrollbar { height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,7 +65,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         wip_fg['Material'] = wip_fg['Material'].str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
         
-        # --- ระบบค้นหาคอลัมน์อัจฉริยะ สำหรับยอดชิ้นงาน (Pcs) ---
         fo_cols = [c for c in data_fo.columns if 'FO' in str(c).upper() and '(PCS)' in str(c).upper() and re.search(r'\d{2}\.\d{4}', str(c))]
         if len(fo_cols) >= 3:
             fo_cols.sort(key=lambda x: pd.to_datetime(re.search(r'\d{2}\.\d{4}', x).group(), format='%m.%Y'))
@@ -96,7 +81,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
             df[fallback_name] = 0
             return fallback_name
 
-        # ดึงยอดชิ้นงาน (Pcs)
         fo_n_minus_1_col = get_valid_col(data_fo, 'FO', '(PCS)', m_minus_1_str, f'FO_PCS_{m_minus_1_str}')
         ord_n_minus_1_col = get_valid_col(data_fo, 'ORD', '(PCS)', m_minus_1_str, f'ORD_PCS_{m_minus_1_str}')
         fo_n_col = get_valid_col(data_fo, 'FO', '(PCS)', m_n_str, f'FO_PCS_{m_n_str}')
@@ -110,7 +94,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         df['Max_N'] = df[[fo_n_col, ord_n_col]].max(axis=1).fillna(0)
         df['Max_N1'] = df[[fo_n1_col, ord_n1_col]].max(axis=1).fillna(0)
         
-        # --- ดึงยอดขาย (Amt) เดือน N จากช่อง O (Index 14) โดยตรง ---
         if len(data_fo.columns) >= 15:
             amt_series = pd.to_numeric(data_fo.iloc[:, 14], errors='coerce').fillna(0)
             total_sales_n = amt_series.sum()
@@ -157,7 +140,7 @@ with st.sidebar:
     settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'machine_settings.json')
     data_settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data_settings.json')
 
-    # 📌 โหลดค่าพารามิเตอร์เริ่มต้นที่เคยเซฟไว้
+    # โหลดค่าพารามิเตอร์เริ่มต้น
     saved_data_settings = {}
     if os.path.exists(data_settings_file):
         try:
@@ -169,38 +152,41 @@ with st.sidebar:
     def_work_days = saved_data_settings.get("work_days", 23)
     def_wip = saved_data_settings.get("wip_reduction_pct", 0.0)
 
-    st.markdown("---")
-    st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
-    work_days = st.number_input("วันทำงานปกติ (วัน/เดือน)", min_value=1, max_value=31, value=int(def_work_days))
-    wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=float(def_wip), step=1.0)
+    # 📌 ใช้ session_state ควบคุมค่าในหน้าจอ
+    if "p_work_days" not in st.session_state:
+        st.session_state.p_work_days = int(def_work_days)
+    if "p_wip" not in st.session_state:
+        st.session_state.p_wip = float(def_wip)
 
     st.markdown("---")
-    st.markdown("### 💾 3. บันทึกข้อมูลและตั้งค่าทั้งหน้า")
+    st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
+    work_days = st.number_input("วันทำงานปกติ (วัน/เดือน)", min_value=1, max_value=31, key="p_work_days")
+    wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, step=1.0, key="p_wip")
+
+    st.markdown("---")
+    st.markdown("### 💾 3. บันทึกระบบ")
     
-    # 📌 ระบบจำไฟล์ข้อมูลและพารามิเตอร์แบบ All-in-one
     active_file = None
     if uploaded_up is not None:
         active_file = uploaded_up
-        if st.button("💾 บันทึกการตั้งค่าทั้งหมดลงระบบ", use_container_width=True):
+        if st.button("💾 บันทึกไฟล์ข้อมูลและพารามิเตอร์", use_container_width=True):
             with open(saved_up_file, "wb") as f:
                 f.write(uploaded_up.getbuffer())
-            trigger_save = True # ส่งสัญญาณให้เซฟข้อมูลตารางด้านล่างด้วย
-            st.success("✅ บันทึกไฟล์ข้อมูลและพารามิเตอร์เรียบร้อย!")
+            trigger_save = True
         st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
     elif os.path.exists(saved_up_file):
         active_file = saved_up_file
         st.caption("📌 กำลังแสดงผลจาก: **ไฟล์ที่บันทึกไว้ล่าสุด**")
         
         if st.button("💾 บันทึกการตั้งค่าทั้งหมดลงระบบ", use_container_width=True):
-            trigger_save = True # ส่งสัญญาณให้เซฟข้อมูลตารางด้านล่างด้วย
-            st.success("✅ บันทึกพารามิเตอร์เรียบร้อย!")
+            trigger_save = True
             
         if st.button("🗑️ ล้างข้อมูลไฟล์ที่บันทึกไว้", use_container_width=True):
             os.remove(saved_up_file)
             st.rerun()
 
 # ==========================================
-# Header & Placeholder for Export Button
+# Header
 # ==========================================
 col_title, col_export = st.columns([4, 1])
 with col_title:
@@ -223,7 +209,7 @@ if err:
     st.stop()
 
 # ==========================================
-# 1. Custom Sorting & Load Saved Settings
+# 1. Setup Data & Initialize States from JSON
 # ==========================================
 cfg = mach_summary.copy()
 cfg['Hours/Shift'] = 7.0
@@ -238,7 +224,7 @@ def get_sort_priority(machine_type):
 cfg['Sort_Priority'] = cfg['Machine Type'].apply(get_sort_priority)
 cfg = cfg.sort_values(by=['Sort_Priority', 'Machine Type']).reset_index(drop=True)
 
-# 📌 โหลดค่าตั้งค่ากะ/OEE/OT ที่เคยเซฟไว้
+# 📌 โหลดค่าตั้งค่าตารางที่เคยเซฟไว้
 saved_settings = {}
 if os.path.exists(settings_file):
     try:
@@ -252,21 +238,29 @@ saved_use = saved_settings.get('use_dict', {})
 saved_shift = saved_settings.get('shift_dict', {})
 saved_ot = saved_settings.get('ot_dict', {})
 
-if "oee_dict" not in st.session_state:
-    st.session_state.oee_dict = {mt: int(saved_oee.get(mt, 85)) for mt in cfg['Machine Type']}
-if "use_dict" not in st.session_state:
-    st.session_state.use_dict = {row['Machine Type']: int(saved_use.get(row['Machine Type'], row['Usable Machines'])) for _, row in cfg.iterrows()}
-if "shift_dict" not in st.session_state:
-    st.session_state.shift_dict = {row['Machine Type']: float(saved_shift.get(row['Machine Type'], 3.0)) for _, row in cfg.iterrows()}
-if "ot_dict" not in st.session_state:
-    st.session_state.ot_dict = {row['Machine Type']: int(saved_ot.get(row['Machine Type'], 0)) for _, row in cfg.iterrows()}
+# 📌 กำหนดค่าให้ตัวแปรในหน้าจอโดยใช้ "ชื่อเครื่อง" เป็นกุญแจหลัก
+for idx, row in cfg.iterrows():
+    mt = str(row['Machine Type'])
+    
+    # สร้าง Key สำหรับ Streamlit Widget ให้ผูกกับชื่อเครื่อง
+    u_key = f"use_{mt}"
+    s_key = f"shf_{mt}"
+    o_key = f"oee_{mt}"
+    ot_key = f"ot_{mt}"
+    
+    if u_key not in st.session_state:
+        st.session_state[u_key] = int(saved_use.get(mt, row['Usable Machines']))
+    if s_key not in st.session_state:
+        st.session_state[s_key] = float(saved_shift.get(mt, 3.0))
+    if o_key not in st.session_state:
+        st.session_state[o_key] = int(saved_oee.get(mt, 85))
+    if ot_key not in st.session_state:
+        st.session_state[ot_key] = int(saved_ot.get(mt, 0))
 
 # ==========================================
-# 2. KPI Cards (เตรียม Placeholder)
+# 2. KPI Cards Placeholder
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
-
-# แถวที่ 1 (4 ใบ)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -274,14 +268,11 @@ ph3 = kpi3.empty()
 ph4 = kpi4.empty()
 
 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-
-# แถวที่ 2 (4 ใบ)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
 ph7 = kpi7.empty()
 ph8 = kpi8.empty()
-
 st.divider()
 
 # ==========================================
@@ -301,17 +292,17 @@ with col_adj:
         with b_col2:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             if st.button("✨ อัปเดต", use_container_width=True):
+                # อัปเดตค่า OEE ให้ทุกเครื่องทันที
                 for mt in cfg['Machine Type']:
-                    st.session_state.oee_dict[mt] = bulk_oee
+                    st.session_state[f"oee_{mt}"] = bulk_oee
                 st.rerun() 
         with b_col3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            if st.button("💾 บันทึกตารางนี้", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
-                trigger_save = True # ส่งสัญญาณให้รวบรวมข้อมูลเซฟตอนท้ายสคริปต์
+            if st.button("💾 บันทึกตารางนี้", use_container_width=True):
+                trigger_save = True 
         
         st.markdown("---")
         
-        # ปรับเพิ่มคอลัมน์ OT (+วัน)
         h1, h2, h3, h4, h5, h6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
@@ -321,32 +312,20 @@ with col_adj:
         h6.markdown("**<div style='text-align:center;'>OT(วัน)</div>**", unsafe_allow_html=True)
         
         with st.container(height=350):
+            shift_options = [1.0, 1.5, 2.0, 3.0]
             for idx, row in cfg.iterrows():
-                mt = row['Machine Type']
+                mt = str(row['Machine Type'])
                 total_mach = int(row['Total Machines'])
                 
                 c1, c2, c3, c4, c5, c6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
-                
                 c1.markdown(f"<div style='font-size: 13px; margin-top: 8px; white-space: nowrap; overflow-x: auto; padding-bottom: 2px;' title='{mt}'><b>{mt}</b></div>", unsafe_allow_html=True)
                 c2.markdown(f"<div style='font-size: 13px; margin-top: 8px; text-align: center;'>{total_mach}</div>", unsafe_allow_html=True)
                 
-                current_use = st.session_state.use_dict.get(mt, int(row['Usable Machines']))
-                use_val = c3.number_input("ใช้", min_value=0, value=int(current_use), step=1, format="%d", key=f"u_{idx}", label_visibility="collapsed")
-                
-                shift_options = [1.0, 1.5, 2.0, 3.0]
-                current_shift = st.session_state.shift_dict.get(mt, 3.0)
-                shift_val = c4.selectbox("กะ", shift_options, index=shift_options.index(current_shift), key=f"s_{idx}", label_visibility="collapsed")
-                
-                current_oee = st.session_state.oee_dict.get(mt, 85)
-                oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
-                
-                current_ot = st.session_state.ot_dict.get(mt, 0)
-                ot_val = c6.number_input("OT", min_value=0, max_value=31, value=int(current_ot), step=1, format="%d", key=f"ot_{idx}", label_visibility="collapsed")
-                
-                st.session_state.use_dict[mt] = use_val
-                st.session_state.shift_dict[mt] = shift_val
-                st.session_state.oee_dict[mt] = oee_val
-                st.session_state.ot_dict[mt] = ot_val
+                # 📌 สร้าง Widget ควบคุมค่าจาก Session State โดยตรง
+                use_val = c3.number_input("ใช้", min_value=0, step=1, key=f"use_{mt}", label_visibility="collapsed")
+                shift_val = c4.selectbox("กะ", shift_options, key=f"shf_{mt}", label_visibility="collapsed")
+                oee_val = c5.number_input("OEE", min_value=1, max_value=100, step=1, key=f"oee_{mt}", label_visibility="collapsed")
+                ot_val = c6.number_input("OT", min_value=0, max_value=31, step=1, key=f"ot_{mt}", label_visibility="collapsed")
                 
                 cfg.at[idx, 'Usable Machines'] = use_val
                 cfg.at[idx, 'Shifts/Day'] = shift_val
@@ -360,14 +339,14 @@ with col_adj:
         if over_machines_alerts:
             st.error("⚠️ **ใช้งานเครื่องจักรเกินจำนวนที่มี:**\n" + "\n".join(over_machines_alerts))
 
-# --- คำนวณ Capacity หลังรับค่าจากแผงควบคุม (บวก OT_Days เข้าไปในวันทำงาน) ---
+# --- คำนวณ Capacity ---
 cfg['Capacity_Per_Machine'] = (cfg['Shifts/Day'] * cfg['Hours/Shift'] * (work_days + cfg['OT_Days'].fillna(0)) * (cfg['OEE (%)'] / 100.0))
 cfg['Available Hours'] = cfg['Usable Machines'] * cfg['Capacity_Per_Machine']
 cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] / cfg['Available Hours']) * 100.0, 0.0)
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
 # ==========================================
-# 📌 ปุ่ม Export (ดึงค่าที่อัปเดตแล้วมาสร้างไฟล์)
+# 📌 ปุ่ม Export
 # ==========================================
 with export_placeholder.container():
     st.write("")
@@ -413,17 +392,15 @@ overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
 
-# 📌 คำนวณเครื่องพร้อมใช้ (ตั้งค่า) โดยเทียบสัดส่วนกะ (3 กะ = 1 เครื่องเต็ม)
+# 📌 คำนวณเครื่องพร้อมใช้
 adj_mach_val = (cfg['Usable Machines'] * (cfg['Shifts/Day'] / 3.0)).sum()
 adj_mach_str = f"{adj_mach_val:.2f}".rstrip('0').rstrip('.') if '.' in f"{adj_mach_val:.2f}" else f"{adj_mach_val:.0f}"
 
-# แถว 1
 ph1.metric("⚙️ เครื่องทั้งหมด", f"{total_machines_all} เครื่อง")
 ph2.metric("💡 เครื่องพร้อมใช้ (ตั้งค่า)", f"{adj_mach_str} เครื่อง")
 ph3.metric("🔥 เครื่องที่ต้องใช้จริง", f"{total_req_machines:.1f} เครื่อง")
 ph4.metric("⏱️ ชั่วโมงผลิตรวม", f"{total_req:,.0f} ชม.")
 
-# แถว 2
 ph5.metric("📈 Util. เฉลี่ยรวม", f"{overall_util:.1f}%")
 ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta="Over Capacity" if over_cap_count > 0 else "ปกติ", delta_color="inverse")
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
@@ -431,7 +408,6 @@ ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} �
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
-    # 📌 วาดกราฟบนแกน Y เดียวกัน (ไม่ใช้ secondary_y) เพื่อให้สเกลตรงกันเป๊ะ
     fig_bar = go.Figure()
     bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
@@ -455,7 +431,6 @@ with col_chart:
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
-    # แกน Y ใช้เปอร์เซ็นต์ร่วมกัน (ไม่มี secondary_y อีกต่อไป)
     fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -511,12 +486,12 @@ with col_donut_ind:
             with cols[idx]:
                 short_name = data['Machine Type'][:25] + ".." if len(data['Machine Type']) > 25 else data['Machine Type']
                 st.markdown(f"<div style='text-align: center; font-size: 13px; font-weight: 600; color: #1e293b;'>{short_name}</div>", unsafe_allow_html=True)
-                st.plotly_chart(create_donut("", data['Utilization (%)'], height=180), use_container_width=True, key=f"donut_{index}")
+                st.plotly_chart(create_donut("", data['Utilization (%)'], height=180), use_container_width=True, key=f"donut_{data['Machine Type']}")
 
 st.divider()
 
 # ==========================================
-# 5. Deep Dive Analytics (Top 5 & 3-Month Trends)
+# 5. Deep Dive Analytics
 # ==========================================
 col_deep1, col_deep2 = st.columns(2)
 
@@ -593,21 +568,29 @@ with col_deep2:
             st.info("ไม่มี Part ที่ยอดสั่งผลิตลดลงเกิน 30% ในช่วง 3 เดือน")
 
 # ==========================================
-# 📌 ระบบบันทึกผลรวมศูนย์ (ทำงานตอนท้ายสุดเพื่อเก็บค่าล่าสุด)
+# 📌 ระบบบันทึกผลแบบรวมศูนย์ 
 # ==========================================
 if trigger_save:
-    # 1. บันทึกพารามิเตอร์ซ้ายมือ
+    # 1. บันทึกพารามิเตอร์วันทำงาน
     with open(data_settings_file, 'w', encoding='utf-8') as f:
         json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
         
-    # 2. บันทึกค่าตารางทั้งหมด (ดึงค่าปัจจุบันที่ถูกคำนวณแล้วใน Session State)
+    # 2. บันทึกค่าตาราง (ดึงค่าจากหน้าจอ)
+    new_oee, new_use, new_shift, new_ot = {}, {}, {}, {}
+    for mt in cfg['Machine Type']:
+        mt_str = str(mt)
+        new_use[mt_str] = st.session_state.get(f"use_{mt_str}", 0)
+        new_shift[mt_str] = st.session_state.get(f"shf_{mt_str}", 3.0)
+        new_oee[mt_str] = st.session_state.get(f"oee_{mt_str}", 85)
+        new_ot[mt_str] = st.session_state.get(f"ot_{mt_str}", 0)
+
     settings_data = {
-        'oee_dict': st.session_state.oee_dict,
-        'use_dict': st.session_state.use_dict,
-        'shift_dict': st.session_state.shift_dict,
-        'ot_dict': st.session_state.ot_dict
+        'oee_dict': new_oee,
+        'use_dict': new_use,
+        'shift_dict': new_shift,
+        'ot_dict': new_ot
     }
     with open(settings_file, 'w', encoding='utf-8') as f:
         json.dump(settings_data, f, ensure_ascii=False, indent=4)
         
-    st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลงระบบเรียบร้อยแล้ว!")
+    st.toast("✅ บันทึกข้อมูลและตั้งค่าทั้งหมดลงระบบเรียบร้อยแล้ว!")
