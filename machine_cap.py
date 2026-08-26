@@ -14,6 +14,9 @@ import json
 # ==========================================
 st.set_page_config(page_title="Press Capacity Dashboard", page_icon="🏭", layout="wide")
 
+# ตัวแปรควบคุมการ Save ทั้งหน้า
+trigger_save = False
+
 # ==========================================
 # CSS Styling (Clean & Modern Design)
 # ==========================================
@@ -172,27 +175,24 @@ with st.sidebar:
     wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=float(def_wip), step=1.0)
 
     st.markdown("---")
-    st.markdown("### 💾 3. บันทึกระบบ")
+    st.markdown("### 💾 3. บันทึกข้อมูลและตั้งค่าทั้งหน้า")
     
-    # 📌 ระบบจำไฟล์ข้อมูลและพารามิเตอร์
+    # 📌 ระบบจำไฟล์ข้อมูลและพารามิเตอร์แบบ All-in-one
     active_file = None
     if uploaded_up is not None:
         active_file = uploaded_up
-        if st.button("💾 บันทึกไฟล์ข้อมูลและพารามิเตอร์", use_container_width=True):
+        if st.button("💾 บันทึกการตั้งค่าทั้งหมดลงระบบ", use_container_width=True):
             with open(saved_up_file, "wb") as f:
                 f.write(uploaded_up.getbuffer())
-            with open(data_settings_file, 'w', encoding='utf-8') as f:
-                json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
-            st.success("✅ บันทึกไฟล์และพารามิเตอร์เรียบร้อย!")
+            trigger_save = True # ส่งสัญญาณให้เซฟข้อมูลตารางด้านล่างด้วย
+            st.success("✅ บันทึกไฟล์ข้อมูลและพารามิเตอร์เรียบร้อย!")
         st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
     elif os.path.exists(saved_up_file):
         active_file = saved_up_file
         st.caption("📌 กำลังแสดงผลจาก: **ไฟล์ที่บันทึกไว้ล่าสุด**")
         
-        # ให้กดอัปเดตเฉพาะพารามิเตอร์ได้ถ้าไม่ได้อัปโหลดไฟล์ใหม่
-        if st.button("💾 บันทึกเฉพาะพารามิเตอร์ใหม่", use_container_width=True):
-            with open(data_settings_file, 'w', encoding='utf-8') as f:
-                json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
+        if st.button("💾 บันทึกการตั้งค่าทั้งหมดลงระบบ", use_container_width=True):
+            trigger_save = True # ส่งสัญญาณให้เซฟข้อมูลตารางด้านล่างด้วย
             st.success("✅ บันทึกพารามิเตอร์เรียบร้อย!")
             
         if st.button("🗑️ ล้างข้อมูลไฟล์ที่บันทึกไว้", use_container_width=True):
@@ -306,25 +306,8 @@ with col_adj:
                 st.rerun() 
         with b_col3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            # 📌 แก้ไขปุ่มเซฟ: ดึงข้อมูลสดๆ จากหน้าจอ (st.session_state) แบบ Real-time เพื่อกันปัญหาการดึงค่าเก่าไปเซฟ
-            if st.button("💾 บันทึกค่า", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
-                new_oee, new_use, new_shift, new_ot = {}, {}, {}, {}
-                for idx, row in cfg.iterrows():
-                    mt = row['Machine Type']
-                    new_use[mt] = int(st.session_state.get(f"u_{idx}", st.session_state.use_dict.get(mt, 0)))
-                    new_shift[mt] = float(st.session_state.get(f"s_{idx}", st.session_state.shift_dict.get(mt, 3.0)))
-                    new_oee[mt] = int(st.session_state.get(f"o_{idx}", st.session_state.oee_dict.get(mt, 85)))
-                    new_ot[mt] = int(st.session_state.get(f"ot_{idx}", st.session_state.ot_dict.get(mt, 0)))
-                
-                settings_data = {
-                    'oee_dict': new_oee,
-                    'use_dict': new_use,
-                    'shift_dict': new_shift,
-                    'ot_dict': new_ot
-                }
-                with open(settings_file, 'w', encoding='utf-8') as f:
-                    json.dump(settings_data, f, ensure_ascii=False, indent=4)
-                st.toast("✅ บันทึกค่าที่ตั้งไว้เรียบร้อยแล้ว!")
+            if st.button("💾 บันทึกตารางนี้", use_container_width=True, help="บันทึกค่าที่ตั้งไว้ใช้ในครั้งต่อไป"):
+                trigger_save = True # ส่งสัญญาณให้รวบรวมข้อมูลเซฟตอนท้ายสคริปต์
         
         st.markdown("---")
         
@@ -448,6 +431,7 @@ ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} �
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
+    # 📌 วาดกราฟบนแกน Y เดียวกัน (ไม่ใช้ secondary_y) เพื่อให้สเกลตรงกันเป๊ะ
     fig_bar = go.Figure()
     bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
@@ -471,6 +455,7 @@ with col_chart:
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
+    # แกน Y ใช้เปอร์เซ็นต์ร่วมกัน (ไม่มี secondary_y อีกต่อไป)
     fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -606,3 +591,23 @@ with col_deep2:
             )
         else:
             st.info("ไม่มี Part ที่ยอดสั่งผลิตลดลงเกิน 30% ในช่วง 3 เดือน")
+
+# ==========================================
+# 📌 ระบบบันทึกผลรวมศูนย์ (ทำงานตอนท้ายสุดเพื่อเก็บค่าล่าสุด)
+# ==========================================
+if trigger_save:
+    # 1. บันทึกพารามิเตอร์ซ้ายมือ
+    with open(data_settings_file, 'w', encoding='utf-8') as f:
+        json.dump({"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}, f)
+        
+    # 2. บันทึกค่าตารางทั้งหมด (ดึงค่าปัจจุบันที่ถูกคำนวณแล้วใน Session State)
+    settings_data = {
+        'oee_dict': st.session_state.oee_dict,
+        'use_dict': st.session_state.use_dict,
+        'shift_dict': st.session_state.shift_dict,
+        'ot_dict': st.session_state.ot_dict
+    }
+    with open(settings_file, 'w', encoding='utf-8') as f:
+        json.dump(settings_data, f, ensure_ascii=False, indent=4)
+        
+    st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลงระบบเรียบร้อยแล้ว!")
