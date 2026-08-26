@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import os
 import re
@@ -241,7 +240,6 @@ if "ot_dict" not in st.session_state:
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
 
-# แถวที่ 1 (4 ใบ)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -250,7 +248,6 @@ ph4 = kpi4.empty()
 
 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
-# แถวที่ 2 (4 ใบ)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
@@ -294,7 +291,6 @@ with col_adj:
         
         st.markdown("---")
         
-        # 📌 ปรับเพิ่มคอลัมน์ OT (+วัน)
         h1, h2, h3, h4, h5, h6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
@@ -323,7 +319,6 @@ with col_adj:
                 current_oee = st.session_state.oee_dict.get(mt, 85)
                 oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
                 
-                # 📌 ช่องกรอก OT พิเศษ (หน่วยเป็นวัน)
                 current_ot = st.session_state.ot_dict.get(mt, 0)
                 ot_val = c6.number_input("OT", min_value=0, max_value=31, value=int(current_ot), step=1, format="%d", key=f"ot_{idx}", label_visibility="collapsed")
                 
@@ -415,31 +410,32 @@ ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} �
 
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
-    fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
+    # 📌 วาดกราฟบนแกน Y เดียวกัน (ไม่ใช้ secondary_y) เพื่อให้สเกลตรงกันเป๊ะ
+    fig_bar = go.Figure()
     bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
     fig_bar.add_trace(go.Bar(
         x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
         text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='inside', textfont=dict(color='white'),
         hovertemplate="<b>%{x}</b><br>Utilization: %{y:.1f}%<extra></extra>"
-    ), secondary_y=False)
+    ))
     
     fig_bar.add_trace(go.Scatter(
         x=cfg['Machine Type'], y=cfg['OEE (%)'], mode='lines+markers', name="OEE (%)",
         line=dict(color='#f59e0b', width=3, shape='spline'), 
         marker=dict(size=8, symbol='diamond', line=dict(width=1, color='white')),
         hovertemplate="<b>%{x}</b><br>OEE: %{y:.1f}%<extra></extra>"
-    ), secondary_y=True)
+    ))
     
     fig_bar.add_hline(y=100, line_dash="dash", line_color="#ef4444", line_width=2, 
                       annotation_text="Max Capacity 100%", annotation_position="top left",
-                      annotation_font=dict(color="#ef4444", size=12), secondary_y=False)
+                      annotation_font=dict(color="#ef4444", size=12))
     
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
-    fig_bar.update_yaxes(title_text="Utilization (%)", gridcolor='rgba(200,200,200,0.2)', secondary_y=False, rangemode='tozero')
-    fig_bar.update_yaxes(title_text="OEE (%)", showgrid=False, secondary_y=True, range=[0, 110])
+    # แกน Y ใช้เปอร์เซ็นต์ร่วมกัน (ไม่มี secondary_y อีกต่อไป)
+    fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.divider()
@@ -494,13 +490,7 @@ with col_donut_ind:
             with cols[idx]:
                 short_name = data['Machine Type'][:25] + ".." if len(data['Machine Type']) > 25 else data['Machine Type']
                 st.markdown(f"<div style='text-align: center; font-size: 13px; font-weight: 600; color: #1e293b;'>{short_name}</div>", unsafe_allow_html=True)
-                
-                # 📌 ใส่ key เพื่อแก้ปัญหา DuplicateElementId
-                st.plotly_chart(
-                    create_donut("", data['Utilization (%)'], height=180), 
-                    use_container_width=True, 
-                    key=f"donut_{index}"
-                )
+                st.plotly_chart(create_donut("", data['Utilization (%)'], height=180), use_container_width=True, key=f"donut_{index}")
 
 st.divider()
 
