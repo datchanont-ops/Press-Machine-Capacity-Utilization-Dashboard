@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 import os
 import re
@@ -151,27 +152,52 @@ with st.sidebar:
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
     saved_up_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_data_upload.xlsx')
     settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'machine_settings.json')
+    data_settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data_settings.json')
 
-    # 📌 ระบบจำไฟล์ข้อมูล (ไม่ต้องอัปโหลดซ้ำ)
+    # 📌 โหลดค่าพารามิเตอร์เริ่มต้นที่เคยเซฟไว้
+    saved_data_settings = {}
+    if os.path.exists(data_settings_file):
+        try:
+            with open(data_settings_file, 'r', encoding='utf-8') as f:
+                saved_data_settings = json.load(f)
+        except:
+            pass
+    
+    def_work_days = saved_data_settings.get("work_days", 23)
+    def_wip = saved_data_settings.get("wip_reduction_pct", 0.0)
+
+    st.markdown("---")
+    st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
+    work_days = st.number_input("วันทำงานปกติ (วัน/เดือน)", min_value=1, max_value=31, value=int(def_work_days))
+    wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=float(def_wip), step=1.0)
+
+    st.markdown("---")
+    st.markdown("### 💾 3. บันทึกระบบ")
+    
+    # 📌 ระบบจำไฟล์ข้อมูลและพารามิเตอร์
     active_file = None
     if uploaded_up is not None:
         active_file = uploaded_up
-        if st.button("💾 บันทึกไฟล์ข้อมูลนี้ไว้ใช้รอบหน้า", use_container_width=True):
+        if st.button("💾 บันทึกไฟล์ข้อมูลและพารามิเตอร์", use_container_width=True):
             with open(saved_up_file, "wb") as f:
                 f.write(uploaded_up.getbuffer())
-            st.success("✅ บันทึกไฟล์เรียบร้อย! รอบหน้าไม่ต้องอัปโหลดใหม่")
+            with open(data_settings_file, 'w', encoding='utf-8') as f:
+                json.dump({"work_days": work_days, "wip_reduction_pct": wip_reduction_pct}, f)
+            st.success("✅ บันทึกไฟล์และพารามิเตอร์เรียบร้อย!")
         st.caption("🟢 กำลังแสดงผลจาก: **ไฟล์ที่เพิ่งอัปโหลด**")
     elif os.path.exists(saved_up_file):
         active_file = saved_up_file
         st.caption("📌 กำลังแสดงผลจาก: **ไฟล์ที่บันทึกไว้ล่าสุด**")
+        
+        # ให้กดอัปเดตเฉพาะพารามิเตอร์ได้ถ้าไม่ได้อัปโหลดไฟล์ใหม่
+        if st.button("💾 บันทึกเฉพาะพารามิเตอร์ใหม่", use_container_width=True):
+            with open(data_settings_file, 'w', encoding='utf-8') as f:
+                json.dump({"work_days": work_days, "wip_reduction_pct": wip_reduction_pct}, f)
+            st.success("✅ บันทึกพารามิเตอร์เรียบร้อย!")
+            
         if st.button("🗑️ ล้างข้อมูลไฟล์ที่บันทึกไว้", use_container_width=True):
             os.remove(saved_up_file)
             st.rerun()
-
-    st.markdown("---")
-    st.markdown("### ⚙️ 2. ค่าพารามิเตอร์เริ่มต้น")
-    work_days = st.number_input("วันทำงานปกติ (วัน/เดือน)", min_value=1, max_value=31, value=23)
-    wip_reduction_pct = st.number_input("ปรับลด % WIP/FG ปลายเดือน", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
 
 # ==========================================
 # Header & Placeholder for Export Button
@@ -240,6 +266,7 @@ if "ot_dict" not in st.session_state:
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
 
+# แถวที่ 1 (4 ใบ)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -248,6 +275,7 @@ ph4 = kpi4.empty()
 
 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
+# แถวที่ 2 (4 ใบ)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 ph5 = kpi5.empty()
 ph6 = kpi6.empty()
@@ -291,6 +319,7 @@ with col_adj:
         
         st.markdown("---")
         
+        # 📌 ปรับเพิ่มคอลัมน์ OT (+วัน)
         h1, h2, h3, h4, h5, h6 = st.columns([2.8, 0.8, 1.0, 1.2, 1.2, 1.0])
         h1.markdown("**Machine**")
         h2.markdown("**<div style='text-align:center;'>มี</div>**", unsafe_allow_html=True)
@@ -319,6 +348,7 @@ with col_adj:
                 current_oee = st.session_state.oee_dict.get(mt, 85)
                 oee_val = c5.number_input("OEE", min_value=1, max_value=100, value=int(current_oee), step=1, format="%d", key=f"o_{idx}", label_visibility="collapsed")
                 
+                # 📌 ช่องกรอก OT พิเศษ (หน่วยเป็นวัน)
                 current_ot = st.session_state.ot_dict.get(mt, 0)
                 ot_val = c6.number_input("OT", min_value=0, max_value=31, value=int(current_ot), step=1, format="%d", key=f"ot_{idx}", label_visibility="collapsed")
                 
