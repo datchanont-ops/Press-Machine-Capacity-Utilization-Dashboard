@@ -1,0 +1,62 @@
+{
+    "oee_dict": {
+        "INJ 2.5 L 500x600 200T EM": 85,
+        "INJ 350 T 700x700 COOL RUNNER": 85,
+        "INJECT 0.8 L 450x510": 85,
+        "INJECT 1.6 L 500x600 COOL RUNNER TMA": 85,
+        "INJECT 1.6 L 500x600 COOL RUNNER VA": 85,
+        "INJECT 1.6 L 500x600 HOT EM": 85,
+        "INJECT 1.6 L 600x600 COOL RUNNER  (Daylight 800-870 mm.)": 85,
+        "INJECT 1.6 L 600x600 COOL RUNNER VC": 85,
+        "INJECT 300T": 85,
+        "INJECT 400T": 85,
+        "PRESS 510X510": 85,
+        "VACUUM 510x510": 85,
+        "VACUUM 700x700": 85
+    },
+    "use_dict": {
+        "INJ 2.5 L 500x600 200T EM": 0,
+        "INJ 350 T 700x700 COOL RUNNER": 3,
+        "INJECT 0.8 L 450x510": 6,
+        "INJECT 1.6 L 500x600 COOL RUNNER TMA": 6,
+        "INJECT 1.6 L 500x600 COOL RUNNER VA": 9,
+        "INJECT 1.6 L 500x600 HOT EM": 5,
+        "INJECT 1.6 L 600x600 COOL RUNNER  (Daylight 800-870 mm.)": 4,
+        "INJECT 1.6 L 600x600 COOL RUNNER VC": 14,
+        "INJECT 300T": 1,
+        "INJECT 400T": 1,
+        "PRESS 510X510": 1,
+        "VACUUM 510x510": 2,
+        "VACUUM 700x700": 0
+    },
+    "shift_dict": {
+        "INJ 2.5 L 500x600 200T EM": 3.0,
+        "INJ 350 T 700x700 COOL RUNNER": 3.0,
+        "INJECT 0.8 L 450x510": 3.0,
+        "INJECT 1.6 L 500x600 COOL RUNNER TMA": 3.0,
+        "INJECT 1.6 L 500x600 COOL RUNNER VA": 3.0,
+        "INJECT 1.6 L 500x600 HOT EM": 3.0,
+        "INJECT 1.6 L 600x600 COOL RUNNER  (Daylight 800-870 mm.)": 3.0,
+        "INJECT 1.6 L 600x600 COOL RUNNER VC": 3.0,
+        "INJECT 300T": 3.0,
+        "INJECT 400T": 3.0,
+        "PRESS 510X510": 1.0,
+        "VACUUM 510x510": 3.0,
+        "VACUUM 700x700": 3.0
+    },
+    "ot_dict": {
+        "INJ 2.5 L 500x600 200T EM": 0,
+        "INJ 350 T 700x700 COOL RUNNER": 0,
+        "INJECT 0.8 L 450x510": 0,
+        "INJECT 1.6 L 500x600 COOL RUNNER TMA": 0,
+        "INJECT 1.6 L 500x600 COOL RUNNER VA": 0,
+        "INJECT 1.6 L 500x600 HOT EM": 0,
+        "INJECT 1.6 L 600x600 COOL RUNNER  (Daylight 800-870 mm.)": 0,
+        "INJECT 1.6 L 600x600 COOL RUNNER VC": 0,
+        "INJECT 300T": 0,
+        "INJECT 400T": 6,
+        "PRESS 510X510": 0,
+        "VACUUM 510x510": 0,
+        "VACUUM 700x700": 0
+    }
+}
