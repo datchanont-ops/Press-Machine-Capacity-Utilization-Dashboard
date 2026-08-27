@@ -10,6 +10,7 @@ import io
 import json
 import base64
 import requests
+from datetime import datetime
 
 # ==========================================
 # Page Configuration
@@ -79,34 +80,116 @@ def gh_put_file(remote_path, content_bytes, message):
         return False
 
 # ==========================================
-# CSS Styling (Clean & Modern Design)
+# Design Tokens (shared by CSS + Plotly charts)
 # ==========================================
-st.markdown("""
-<style>
-    [data-testid="stMetric"] {
-        background-color: #ffffff;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0px 4px 6px -1px rgba(0,0,0,0.1);
-        border: 1px solid #e0e0e0;
-        border-left: 5px solid #3b82f6; 
-    }
-    div[data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-left-color: #8b5cf6; } 
-    div[data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-left-color: #10b981; }
-    div[data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-left-color: #f59e0b; }
-    div[data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-left-color: #ef4444; }
+COLOR_BG = "#0B0E14"       # พื้นหลังหน้าจอ (จอควบคุมมืด)
+COLOR_PANEL = "#12161F"    # พื้นการ์ด/แผง
+COLOR_BORDER = "#232838"   # เส้นขอบแผง
+COLOR_GRID = "#1C212D"     # เส้นกริดกราฟ
+COLOR_TEXT = "#E7ECF5"     # ตัวอักษรหลัก
+COLOR_STEEL = "#7C8AA3"    # ตัวอักษรรอง
+COLOR_BLUE = "#3B9EFF"     # สถานะปกติ
+COLOR_AMBER = "#FFB020"    # สถานะเฝ้าระวัง
+COLOR_RED = "#FF4D4F"      # สถานะเกินกำลังผลิต
+COLOR_GREEN = "#2DD4A7"    # สถานะดี
+COLOR_INK = COLOR_TEXT     # (คงชื่อเดิมไว้ใช้ในกราฟ)
+FONT_BODY = "IBM Plex Sans Thai, sans-serif"
+FONT_MONO = "IBM Plex Mono, monospace"
 
-    @media print {
-        .stPopover { display: none !important; }
-        .stExpander { display: none !important; }
-        header { display: none !important; }
-    }
-    div[data-testid="stVerticalBlock"] > div {
-        padding-top: 0.1rem;
-        padding-bottom: 0.1rem;
-    }
-    ::-webkit-scrollbar { height: 6px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+def kpi_card(icon, label, value, sub="", variant="blue"):
+    sub_html = f'<div class="kpi-sub">{sub}</div>' if sub else ""
+    return f"""
+    <div class="kpi-card kpi-{variant}">
+        <div class="kpi-label">{icon} {label}</div>
+        <div class="kpi-value">{value}</div>
+        {sub_html}
+    </div>
+    """
+
+# ==========================================
+# CSS Styling — Dark SCADA / HMI Control-Room Theme
+# ==========================================
+st.markdown(f"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+    :root {{
+        --bg: {COLOR_BG}; --panel: {COLOR_PANEL}; --panel-border: {COLOR_BORDER};
+        --text: {COLOR_TEXT}; --text-dim: {COLOR_STEEL};
+        --blue: {COLOR_BLUE}; --amber: {COLOR_AMBER}; --red: {COLOR_RED}; --green: {COLOR_GREEN};
+        --font-mono: {FONT_MONO}; --font-body: {FONT_BODY};
+    }}
+
+    html, body, [class*="css"] {{ font-family: var(--font-body); }}
+    .stApp {{
+        background-color: var(--bg);
+        background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px);
+        background-size: 24px 24px;
+    }}
+    [data-testid="stSidebar"] {{ background: var(--panel); border-right: 1px solid var(--panel-border); }}
+    h1, h2, h3, h4, p, span, label {{ color: var(--text); }}
+    [data-testid="stCaptionContainer"] {{ color: var(--text-dim) !important; }}
+
+    /* ---------- Andon status strip (บอร์ดไฟสัญญาณสถานะไลน์ผลิต) ---------- */
+    .andon-strip {{
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 18px; border-radius: 8px; margin-bottom: 14px;
+        font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.05em;
+        border: 1px solid var(--panel-border); background: var(--panel);
+    }}
+    .andon-dot {{ width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }}
+    @keyframes andon-pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.35; }} 100% {{ opacity: 1; }} }}
+    .andon-strip.status-green {{ color: #8DF0D4; border-color: rgba(45,212,167,0.35); }}
+    .andon-strip.status-green .andon-dot {{ background: var(--green); box-shadow: 0 0 8px 2px rgba(45,212,167,0.55); animation: andon-pulse 2.2s infinite; }}
+    .andon-strip.status-amber {{ color: #FFD891; border-color: rgba(255,176,32,0.35); }}
+    .andon-strip.status-amber .andon-dot {{ background: var(--amber); box-shadow: 0 0 8px 2px rgba(255,176,32,0.55); animation: andon-pulse 1.4s infinite; }}
+    .andon-strip.status-red {{ color: #FFA3A4; border-color: rgba(255,77,79,0.35); }}
+    .andon-strip.status-red .andon-dot {{ background: var(--red); box-shadow: 0 0 8px 2px rgba(255,77,79,0.6); animation: andon-pulse 0.8s infinite; }}
+
+    /* ---------- Header ---------- */
+    .dash-header {{
+        background: var(--panel); border: 1px solid var(--panel-border); border-left: 3px solid var(--blue);
+        border-radius: 10px; padding: 18px 24px; margin-bottom: 4px;
+    }}
+    .dash-eyebrow {{ font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.15em; color: var(--blue); text-transform: uppercase; margin-bottom: 4px; }}
+    .dash-title {{ color: var(--text); font-size: 22px; font-weight: 600; margin: 0; }}
+    .dash-subtitle {{ color: var(--text-dim); font-size: 12.5px; margin-top: 6px; font-family: var(--font-mono); }}
+
+    /* ---------- KPI cards (custom HTML — replaces st.metric) ---------- */
+    .kpi-card {{
+        background: var(--panel); border: 1px solid var(--panel-border); border-top: 3px solid var(--blue);
+        border-radius: 10px; padding: 14px 18px 12px 18px; height: 100%;
+    }}
+    .kpi-label {{ font-size: 11.5px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }}
+    .kpi-value {{ font-family: var(--font-mono); font-size: 25px; font-weight: 600; color: var(--text); line-height: 1.15; }}
+    .kpi-sub {{ font-size: 11px; color: var(--text-dim); margin-top: 4px; }}
+    .kpi-amber {{ border-top-color: var(--amber); }} .kpi-amber .kpi-value {{ color: var(--amber); }}
+    .kpi-red {{ border-top-color: var(--red); }} .kpi-red .kpi-value {{ color: var(--red); }}
+    .kpi-green {{ border-top-color: var(--green); }} .kpi-green .kpi-value {{ color: var(--green); }}
+
+    /* ---------- Buttons ---------- */
+    .stButton > button, .stDownloadButton > button {{
+        background: var(--panel); border-radius: 6px; border: 1px solid var(--panel-border); font-weight: 500; color: var(--text);
+    }}
+    .stButton > button:hover, .stDownloadButton > button:hover {{ border-color: var(--blue); color: var(--blue); }}
+
+    /* ---------- Tabs ---------- */
+    .stTabs [data-baseweb="tab"] {{ font-family: var(--font-body); font-weight: 500; color: var(--text-dim); }}
+    .stTabs [aria-selected="true"] {{ color: var(--blue) !important; }}
+
+    /* ---------- Expander / Dataframe / Popover ---------- */
+    .stExpander {{ border: 1px solid var(--panel-border) !important; border-radius: 10px !important; background: var(--panel); }}
+    [data-testid="stDataFrame"] {{ border: 1px solid var(--panel-border); border-radius: 8px; }}
+    [data-testid="stPopoverBody"] {{ background: var(--panel); border: 1px solid var(--panel-border); }}
+
+    @media print {{
+        .stPopover {{ display: none !important; }}
+        .stExpander {{ display: none !important; }}
+        header {{ display: none !important; }}
+    }}
+    div[data-testid="stVerticalBlock"] > div {{ padding-top: 0.1rem; padding-bottom: 0.1rem; }}
+    ::-webkit-scrollbar {{ height: 6px; width: 6px; }}
+    ::-webkit-scrollbar-thumb {{ background: var(--panel-border); border-radius: 10px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -294,10 +377,17 @@ with st.sidebar:
 # ==========================================
 # Header
 # ==========================================
+andon_ph = st.empty()
+
 col_title, col_export = st.columns([4, 1])
 with col_title:
-    st.markdown("## 📊 Press Capacity Utilization Dashboard")
-    st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
+    st.markdown("""
+    <div class="dash-header">
+        <div class="dash-eyebrow">PLANT OPERATIONS // PRESS &amp; INJECTION</div>
+        <p class="dash-title">📊 Press Capacity Utilization Dashboard</p>
+        <div class="dash-subtitle">ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 export_placeholder = col_export.empty()
 
@@ -477,10 +567,10 @@ with export_placeholder.container():
         components.html(
             """
             <button onclick="window.parent.print()" style="
-                background-color: #3b82f6; border: none; color: white;
-                padding: 10px 20px; text-align: center; border-radius: 5px;
+                background-color: #2563EB; border: none; color: white;
+                padding: 10px 20px; text-align: center; border-radius: 6px;
                 cursor: pointer; width: 100%; font-family: sans-serif;
-                font-weight: bold; font-size: 14px;
+                font-weight: 600; font-size: 14px;
             ">🖨️ Print / Save as PDF</button>
             <p style="font-size:12px; color:gray; text-align:center; margin-top:10px;">
             * เปิดตัวเลือก <b>'Background graphics'</b> ตอน Print เสมอ
@@ -497,6 +587,21 @@ total_avail = cfg['Available Hours'].sum()
 overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
 total_req_machines = cfg['Req_Machines'].sum()
+
+# 🚦 Andon Strip — สรุปสถานะภาพรวมของไลน์ผลิต
+if over_cap_count > 0:
+    andon_status, andon_label = "status-red", f"PLANT STATUS — OVER CAPACITY · {over_cap_count} ประเภทเครื่องจักรเกินกำลังผลิต"
+elif overall_util >= 85:
+    andon_status, andon_label = "status-amber", f"PLANT STATUS — ใกล้เต็มกำลังผลิต · Utilization เฉลี่ย {overall_util:.1f}%"
+else:
+    andon_status, andon_label = "status-green", f"PLANT STATUS — ปกติ · Utilization เฉลี่ย {overall_util:.1f}%"
+
+andon_ph.markdown(f"""
+<div class="andon-strip {andon_status}">
+    <div class="andon-dot"></div>
+    <div>{andon_label}</div>
+</div>
+""", unsafe_allow_html=True)
 
 # 📌 คำนวณเครื่องพร้อมใช้
 adj_mach_val = (cfg['Usable Machines'] * (cfg['Shifts/Day'] / 3.0)).sum()
@@ -515,29 +620,35 @@ ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} �
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
     fig_bar = go.Figure()
-    bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
+    bar_colors = [COLOR_RED if val > 100 else COLOR_BLUE for val in cfg['Utilization (%)']]
     
     fig_bar.add_trace(go.Bar(
-        x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
-        text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='inside', textfont=dict(color='white'),
+        x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, marker_line_width=0, name="Utilization (%)",
+        text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='inside', textfont=dict(color='white', family=FONT_MONO),
         hovertemplate="<b>%{x}</b><br>Utilization: %{y:.1f}%<extra></extra>"
     ))
     
     fig_bar.add_trace(go.Scatter(
         x=cfg['Machine Type'], y=cfg['OEE (%)'], mode='lines+markers', name="OEE (%)",
-        line=dict(color='#f59e0b', width=3, shape='spline'), 
-        marker=dict(size=8, symbol='diamond', line=dict(width=1, color='white')),
+        line=dict(color=COLOR_AMBER, width=2.5, shape='spline'), 
+        marker=dict(size=7, symbol='diamond', line=dict(width=1, color='white')),
         hovertemplate="<b>%{x}</b><br>OEE: %{y:.1f}%<extra></extra>"
     ))
     
-    fig_bar.add_hline(y=100, line_dash="dash", line_color="#ef4444", line_width=2, 
+    fig_bar.add_hline(y=100, line_dash="dash", line_color=COLOR_RED, line_width=1.5, 
                       annotation_text="Max Capacity 100%", annotation_position="top left",
-                      annotation_font=dict(color="#ef4444", size=12))
+                      annotation_font=dict(color=COLOR_RED, size=11, family=FONT_MONO))
     
-    fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
+    fig_bar.update_layout(
+        height=450, margin=dict(t=20, b=50, l=0, r=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=FONT_BODY, color=COLOR_INK, size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        hovermode="x unified",
+    )
     
-    fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
+    fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor=COLOR_LINE, zerolinecolor=COLOR_LINE, rangemode='tozero')
+    fig_bar.update_xaxes(showgrid=False, linecolor=COLOR_LINE)
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.divider()
@@ -548,22 +659,26 @@ st.divider()
 col_donut_all, col_donut_ind = st.columns([1, 3])
 
 def create_donut(title, util_val, height=220):
-    color = "#ef4444" if util_val > 100 else "#10b981"
+    color = COLOR_RED if util_val > 100 else COLOR_BLUE
     visual_util = min(util_val, 100)
     remaining = max(100 - visual_util, 0)
     
     fig = go.Figure(data=[go.Pie(
         labels=['ใช้งานแล้ว', 'พื้นที่ว่าง'],
-        values=[visual_util, remaining], hole=0.65,
-        marker=dict(colors=[color, '#e2e8f0']), textinfo='none', hoverinfo='label'
+        values=[visual_util, remaining], hole=0.7, sort=False,
+        marker=dict(colors=[color, '#EDEFF3']), textinfo='none', hoverinfo='label'
     )])
     
-    font_size = 28 if height > 220 else 22
-    fig.add_annotation(text=f"<b>{util_val:.1f}%</b>", x=0.5, y=0.5, font_size=font_size, font_color=color, showarrow=False)
+    font_size = 26 if height > 220 else 20
+    fig.add_annotation(text=f"<b>{util_val:.1f}%</b>", x=0.5, y=0.5, font_size=font_size, font_color=color,
+                        font_family=FONT_MONO, showarrow=False)
     
-    layout_args = dict(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=height, paper_bgcolor="rgba(0,0,0,0)")
+    layout_args = dict(
+        showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=height,
+        paper_bgcolor="rgba(0,0,0,0)", font=dict(family=FONT_BODY, color=COLOR_INK),
+    )
     if title: 
-        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=15, color="#1e293b"))
+        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=14, color=COLOR_INK, family=FONT_BODY))
         layout_args['margin']['t'] = 40
     fig.update_layout(**layout_args)
     return fig
@@ -674,15 +789,15 @@ with col_deep2:
             st.info("ไม่มี Part ที่ยอดสั่งผลิตลดลงเกิน 30% ในช่วง 3 เดือน")
 
 # ==========================================
-# 📌 ระบบบันทึกผลรวมศูนย์ (ทำงานตอนท้ายสุดเพื่อเก็บค่าล่าสุด)
+# 📌 ระบบบันทึกผลแบบรวมศูนย์ (local + push ขึ้น GitHub)
 # ==========================================
 if trigger_save:
-    # 1. บันทึกพารามิเตอร์ซ้ายมือ (Local)
-    settings_data_left = {"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}
+    # 1. บันทึกพารามิเตอร์วันทำงาน
+    data_settings_payload = {"work_days": int(work_days), "wip_reduction_pct": float(wip_reduction_pct)}
     with open(data_settings_file, 'w', encoding='utf-8') as f:
-        json.dump(settings_data_left, f)
+        json.dump(data_settings_payload, f)
         
-    # 2. บันทึกค่าตารางทั้งหมด (Local)
+    # 2. บันทึกค่าตาราง (ดึงค่าจากหน้าจอ)
     new_oee, new_use, new_shift, new_ot = {}, {}, {}, {}
     for mt in cfg['Machine Type']:
         mt_str = str(mt)
@@ -691,24 +806,30 @@ if trigger_save:
         new_oee[mt_str] = st.session_state.get(f"oee_{mt_str}", 85)
         new_ot[mt_str] = st.session_state.get(f"ot_{mt_str}", 0)
 
-    settings_data_table = {
+    settings_data = {
         'oee_dict': new_oee,
         'use_dict': new_use,
         'shift_dict': new_shift,
         'ot_dict': new_ot
     }
     with open(settings_file, 'w', encoding='utf-8') as f:
-        json.dump(settings_data_table, f, ensure_ascii=False, indent=4)
-        
-    # 3. อัปโหลดขึ้น GitHub (ถ้าเปิดใช้งาน)
+        json.dump(settings_data, f, ensure_ascii=False, indent=4)
+
     if GITHUB_ENABLED:
         with st.spinner("☁️ กำลังบันทึกการตั้งค่าขึ้น GitHub..."):
-            gh_put_file(f"{GITHUB_DATA_DIR}/data_settings.json", json.dumps(settings_data_left, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save left panel settings")
-            ok_settings = gh_put_file(f"{GITHUB_DATA_DIR}/machine_settings.json", json.dumps(settings_data_table, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save machine settings")
-            
-        if ok_settings:
-            st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลง GitHub เรียบร้อยแล้ว!")
+            ok1 = gh_put_file(
+                f"{GITHUB_DATA_DIR}/data_settings.json",
+                json.dumps(data_settings_payload).encode("utf-8"),
+                "Update data_settings.json",
+            )
+            ok2 = gh_put_file(
+                f"{GITHUB_DATA_DIR}/machine_settings.json",
+                json.dumps(settings_data, ensure_ascii=False, indent=4).encode("utf-8"),
+                "Update machine_settings.json",
+            )
+        if ok1 and ok2:
+            st.toast("✅ บันทึกข้อมูลและตั้งค่าทั้งหมดขึ้น GitHub เรียบร้อยแล้ว!")
         else:
-             st.toast("⚠️ push การตั้งค่าไป GitHub ไม่สำเร็จ (เก็บไว้ใน local ชั่วคราวเท่านั้น)")
+            st.toast("⚠️ บันทึก local สำเร็จ แต่ push ขึ้น GitHub ไม่สำเร็จบางส่วน — ลองใหม่อีกครั้ง")
     else:
-        st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลง Local เรียบร้อยแล้ว!")
+        st.toast("💾 บันทึกไว้ใน local เท่านั้น (ยังไม่ได้ตั้งค่า GitHub Secrets)")
