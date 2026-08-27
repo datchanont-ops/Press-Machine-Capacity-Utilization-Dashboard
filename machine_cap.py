@@ -19,14 +19,8 @@ st.set_page_config(page_title="Press Capacity Dashboard", page_icon="🏭", layo
 trigger_save = False
 
 # ==========================================
-# 🔗 GitHub Persistence Layer
+# 🔗 GitHub Persistence Layer (With Debugging)
 # ==========================================
-# ตั้งค่าใน .streamlit/secrets.toml (local) หรือ Streamlit Cloud > Settings > Secrets:
-#
-# GITHUB_TOKEN   = "ghp_xxxxxxxxxxxxxxxxxxxx"   # Fine-grained PAT, สิทธิ์ Contents: Read & Write
-# GITHUB_REPO    = "your-username/your-repo"
-# GITHUB_BRANCH  = "main"                        # ไม่ใส่ = ใช้ "main"
-# GITHUB_DATA_DIR = "data"                        # ไม่ใส่ = ใช้ "data"
 try:
     GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
     GITHUB_REPO = st.secrets["GITHUB_REPO"]
@@ -45,7 +39,6 @@ def gh_headers():
     }
 
 def gh_get_file(remote_path):
-    """คืนค่า (content_bytes, sha) หรือ (None, None) ถ้าไม่พบไฟล์"""
     if not GITHUB_ENABLED:
         return None, None
     url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{remote_path}?ref={GITHUB_BRANCH}"
@@ -59,10 +52,11 @@ def gh_get_file(remote_path):
         pass
     return None, None
 
+# 📌 อัปเดตฟังก์ชันนี้ให้คายข้อความ Error ออกมา
 def gh_put_file(remote_path, content_bytes, message):
-    """เขียน/อัปเดตไฟล์ใน GitHub repo คืนค่า True/False"""
     if not GITHUB_ENABLED:
-        return False
+        return False, "ยังไม่ได้ตั้งค่า GitHub Secrets"
+    
     _, sha = gh_get_file(remote_path)
     url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{remote_path}"
     payload = {
@@ -72,11 +66,16 @@ def gh_put_file(remote_path, content_bytes, message):
     }
     if sha:
         payload["sha"] = sha
+        
     try:
         r = requests.put(url, headers=gh_headers(), json=payload, timeout=15)
-        return r.status_code in (200, 201)
-    except Exception:
-        return False
+        if r.status_code in (200, 201):
+            return True, "Success"
+        else:
+            # คืนค่ารหัสและข้อความ Error จาก GitHub
+            return False, f"HTTP {r.status_code}: {r.text}"
+    except Exception as e:
+        return False, str(e)
 
 # ==========================================
 # CSS Styling (Clean & Modern Design)
@@ -262,7 +261,7 @@ with st.sidebar:
 
             if GITHUB_ENABLED:
                 with st.spinner("☁️ กำลังบันทึกไฟล์ขึ้น GitHub..."):
-                    ok = gh_put_file(
+                    ok, msg = gh_put_file(
                         f"{GITHUB_DATA_DIR}/saved_data_upload.xlsx",
                         file_bytes,
                         f"Auto-save data upload: {uploaded_up.name}",
@@ -270,7 +269,7 @@ with st.sidebar:
                 if ok:
                     st.toast(f"✅ บันทึกไฟล์ '{uploaded_up.name}' ขึ้น GitHub เรียบร้อยแล้ว")
                 else:
-                    st.toast("⚠️ push ไป GitHub ไม่สำเร็จ (เก็บไว้ใน local ชั่วคราวเท่านั้น)")
+                    st.error(f"⚠️ GitHub Error (อัปโหลดไฟล์ไม่ได้): {msg}")
             else:
                 st.toast(f"💾 บันทึก '{uploaded_up.name}' ไว้ใน local เท่านั้น (ยังไม่ได้ตั้งค่า GitHub)")
 
@@ -674,7 +673,7 @@ with col_deep2:
             st.info("ไม่มี Part ที่ยอดสั่งผลิตลดลงเกิน 30% ในช่วง 3 เดือน")
 
 # ==========================================
-# 📌 ระบบบันทึกผลรวมศูนย์ (ทำงานตอนท้ายสุดเพื่อเก็บค่าล่าสุด)
+# 📌 ระบบบันทึกผลรวมศูนย์ 
 # ==========================================
 if trigger_save:
     # 1. บันทึกพารามิเตอร์ซ้ายมือ (Local)
@@ -703,12 +702,12 @@ if trigger_save:
     # 3. อัปโหลดขึ้น GitHub (ถ้าเปิดใช้งาน)
     if GITHUB_ENABLED:
         with st.spinner("☁️ กำลังบันทึกการตั้งค่าขึ้น GitHub..."):
-            gh_put_file(f"{GITHUB_DATA_DIR}/data_settings.json", json.dumps(settings_data_left, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save left panel settings")
-            ok_settings = gh_put_file(f"{GITHUB_DATA_DIR}/machine_settings.json", json.dumps(settings_data_table, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save machine settings")
+            ok_left, msg_left = gh_put_file(f"{GITHUB_DATA_DIR}/data_settings.json", json.dumps(settings_data_left, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save left panel settings")
+            ok_table, msg_table = gh_put_file(f"{GITHUB_DATA_DIR}/machine_settings.json", json.dumps(settings_data_table, ensure_ascii=False, indent=4).encode('utf-8'), "Auto-save machine settings")
             
-        if ok_settings:
+        if ok_table and ok_left:
             st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลง GitHub เรียบร้อยแล้ว!")
         else:
-             st.toast("⚠️ push การตั้งค่าไป GitHub ไม่สำเร็จ (เก็บไว้ใน local ชั่วคราวเท่านั้น)")
+             st.error(f"⚠️ GitHub Error: {msg_table} / {msg_left}")
     else:
         st.toast("✅ บันทึกข้อมูลและพารามิเตอร์ทั้งหมดลง Local เรียบร้อยแล้ว!")
