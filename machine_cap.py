@@ -78,143 +78,22 @@ def gh_put_file(remote_path, content_bytes, message):
         return False, str(e)
 
 # ==========================================
-# CSS Styling — "Instrument Panel" design system
-# Tokens: ink #0B1220, steel #16213A, canvas #F4F6F9, panel #FFFFFF,
-#         line #E1E6ED, teal(ok) #0C8577, amber(watch) #D97706,
-#         red(over) #DC2626, indigo(secondary) #4F46E5, muted #64748B
-# Type: Space Grotesk (display) / Inter (body) / JetBrains Mono (data)
+# CSS Styling (Clean & Modern Design)
 # ==========================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
-
-    :root {
-        --ink: #0B1220;
-        --steel: #16213A;
-        --canvas: #F4F6F9;
-        --panel: #FFFFFF;
-        --line: #E1E6ED;
-        --teal: #0C8577;
-        --amber: #D97706;
-        --red: #DC2626;
-        --indigo: #4F46E5;
-        --muted: #64748B;
-    }
-
-    html, body, [class*="css"], .stApp, p, span, label, li, div {
-        font-family: 'Inter', -apple-system, sans-serif;
-    }
-    h1, h2, h3, h4, h5, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
-        font-family: 'Space Grotesk', sans-serif !important;
-        color: var(--ink) !important;
-        letter-spacing: -0.01em;
-    }
-    .stApp { background: var(--canvas); }
-
-    /* ---- Sidebar: dark control-panel surface ---- */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, var(--ink) 0%, var(--steel) 100%);
-        border-right: 1px solid rgba(255,255,255,0.06);
-    }
-    section[data-testid="stSidebar"] * { color: #E7ECF3 !important; }
-    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] h4 {
-        color: #FFFFFF !important;
-    }
-    section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.12); }
-    section[data-testid="stSidebar"] input,
-    section[data-testid="stSidebar"] .stNumberInput input,
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div {
-        background: rgba(255,255,255,0.07) !important;
-        border: 1px solid rgba(255,255,255,0.14) !important;
-        border-radius: 6px !important;
-        color: #FFFFFF !important;
-    }
-    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-        background: rgba(255,255,255,0.05);
-        border: 1px dashed rgba(255,255,255,0.25);
-        border-radius: 8px;
-    }
-    section[data-testid="stSidebar"] .stButton button {
-        background: var(--teal) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 6px !important;
-        font-weight: 600;
-    }
-    section[data-testid="stSidebar"] .stButton button:hover { background: #0A6E62 !important; }
-    section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small { color: #94A3B8 !important; }
-
-    /* ---- KPI cards: instrument readouts ---- */
     [data-testid="stMetric"] {
-        background: var(--panel);
-        padding: 14px 18px;
-        border-radius: 10px;
-        border: 1px solid var(--line);
-        border-top: 3px solid var(--teal);
-        box-shadow: 0 1px 2px rgba(11,18,32,0.05);
-        transition: box-shadow .15s ease;
-    }
-    [data-testid="stMetric"]:hover { box-shadow: 0 4px 14px rgba(11,18,32,0.08); }
-    [data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
-        font-weight: 700 !important;
-        color: var(--ink) !important;
-    }
-    [data-testid="stMetricLabel"] {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 12px !important;
-        font-weight: 600 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--muted) !important;
-    }
-    div[data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-top-color: #0284C7; }
-    div[data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-top-color: var(--teal); }
-    div[data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-top-color: var(--amber); }
-    div[data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-top-color: var(--red); }
-
-    /* ---- Tabs styled as panel toggles ---- */
-    .stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid var(--line); }
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        border-radius: 6px 6px 0 0;
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
-        color: var(--muted);
-        padding: 8px 14px;
-    }
-    .stTabs [aria-selected="true"] {
-        color: var(--teal) !important;
-        border-bottom: 2px solid var(--teal) !important;
-        background: rgba(12,133,119,0.06);
-    }
-
-    /* ---- Expanders / popovers ---- */
-    .streamlit-expanderHeader, [data-testid="stExpander"] summary {
-        font-family: 'Space Grotesk', sans-serif !important;
-        font-weight: 600 !important;
-        color: var(--ink) !important;
-    }
-    [data-testid="stExpander"] {
-        border: 1px solid var(--line) !important;
-        border-radius: 10px !important;
-        background: var(--panel);
-    }
-
-    /* ---- Dataframes ---- */
-    [data-testid="stDataFrame"] {
-        border: 1px solid var(--line);
+        background-color: #ffffff;
+        padding: 15px 20px;
         border-radius: 8px;
-        overflow: hidden;
+        box-shadow: 0px 4px 6px -1px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;
+        border-left: 5px solid #3b82f6; 
     }
-
-    /* ---- Dividers ---- */
-    hr { border-color: var(--line) !important; }
-
-    /* ---- Alerts recolored to token palette ---- */
-    [data-testid="stAlertContentInfo"] { color: #0C4A6E; }
-    [data-testid="stAlertContentError"] { color: #7F1D1D; }
+    div[data-testid="column"]:nth-child(1) [data-testid="stMetric"] { border-left-color: #8b5cf6; } 
+    div[data-testid="column"]:nth-child(2) [data-testid="stMetric"] { border-left-color: #10b981; }
+    div[data-testid="column"]:nth-child(3) [data-testid="stMetric"] { border-left-color: #f59e0b; }
+    div[data-testid="column"]:nth-child(4) [data-testid="stMetric"] { border-left-color: #ef4444; }
 
     @media print {
         .stPopover { display: none !important; }
@@ -225,8 +104,8 @@ st.markdown("""
         padding-top: 0.1rem;
         padding-bottom: 0.1rem;
     }
-    ::-webkit-scrollbar { height: 6px; width: 6px; }
-    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+    ::-webkit-scrollbar { height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -312,16 +191,7 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
 # Sidebar: Upload & Global Params
 # ==========================================
 with st.sidebar:
-    st.markdown("""
-    <div style="display:flex; align-items:center; gap:10px; padding:4px 0 18px 0;">
-        <div style="width:40px; height:40px; border-radius:9px; background:linear-gradient(135deg,#0C8577,#0284C7);
-                    display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">🏭</div>
-        <div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; color:#FFFFFF; line-height:1.2;">PRESS CAPACITY</div>
-            <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; color:#5EEAD4;">CONTROL PANEL</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.image("https://cdn-icons-png.flaticon.com/512/2823/2823512.png", width=80)
 
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
     saved_up_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_data_upload.xlsx')
@@ -421,34 +291,13 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# Header — control-panel banner
+# Header
 # ==========================================
-st.markdown(f"""
-<div style="background:linear-gradient(120deg,#0B1220,#16213A 65%,#0C4A47);
-            border-radius:14px; padding:20px 26px; margin-bottom:18px;
-            display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-    <div style="display:flex; align-items:center; gap:14px;">
-        <div style="width:46px; height:46px; border-radius:10px; background:rgba(255,255,255,0.08);
-                    display:flex; align-items:center; justify-content:center; font-size:24px;">📊</div>
-        <div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:22px; color:#FFFFFF; line-height:1.25;">
-                Press Capacity Utilization Dashboard
-            </div>
-            <div style="font-family:'Inter',sans-serif; font-size:13px; color:#94A3B8; margin-top:2px;">
-                ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press
-            </div>
-        </div>
-    </div>
-    <div style="display:flex; align-items:center; gap:8px; background:rgba(12,133,119,0.18);
-                border:1px solid rgba(94,234,212,0.35); border-radius:20px; padding:6px 14px;">
-        <span style="width:8px; height:8px; border-radius:50%; background:#5EEAD4; display:inline-block;
-                     box-shadow:0 0 0 3px rgba(94,234,212,0.2);"></span>
-        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; color:#5EEAD4;">LIVE</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
 col_title, col_export = st.columns([4, 1])
+with col_title:
+    st.markdown("## 📊 Press Capacity Utilization Dashboard")
+    st.caption("ระบบวิเคราะห์ยอดการผลิตและคำนวณอัตราการใช้กำลังการผลิตของเครื่องจักร Press")
+
 export_placeholder = col_export.empty()
 
 if not os.path.exists(db_file):
@@ -517,8 +366,6 @@ for idx, row in cfg.iterrows():
 # 2. KPI Cards Placeholder
 # ==========================================
 st.markdown("### 📈 สรุปผลการดำเนินงาน (Overview)")
-ph_gauge = st.empty()
-st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 ph1 = kpi1.empty()
 ph2 = kpi2.empty()
@@ -629,10 +476,10 @@ with export_placeholder.container():
         components.html(
             """
             <button onclick="window.parent.print()" style="
-                background-color: #0C8577; border: none; color: white;
-                padding: 10px 20px; text-align: center; border-radius: 6px;
-                cursor: pointer; width: 100%; font-family: 'Inter', sans-serif;
-                font-weight: 600; font-size: 14px;
+                background-color: #3b82f6; border: none; color: white;
+                padding: 10px 20px; text-align: center; border-radius: 5px;
+                cursor: pointer; width: 100%; font-family: sans-serif;
+                font-weight: bold; font-size: 14px;
             ">🖨️ Print / Save as PDF</button>
             <p style="font-size:12px; color:gray; text-align:center; margin-top:10px;">
             * เปิดตัวเลือก <b>'Background graphics'</b> ตอน Print เสมอ
@@ -664,68 +511,32 @@ ph6.metric("⚠️ Over Capacity", f"{over_cap_count} ประเภท", delta
 ph7.metric("💰 ยอดขายเดือน N (Amt)", f"฿ {total_sales_n:,.0f}")
 ph8.metric("🗓️ วันทำงานปกติ", f"{int(work_days)} วัน")
 
-# ---- Signature element: segmented load-meter gauge ----
-gauge_pct = max(0.0, min(overall_util, 130.0))
-gauge_fill = min(gauge_pct / 130.0 * 100, 100)
-if overall_util > 100:
-    gauge_color, gauge_status = "#DC2626", "OVER CAPACITY"
-elif overall_util >= 85:
-    gauge_color, gauge_status = "#D97706", "NEAR LIMIT"
-else:
-    gauge_color, gauge_status = "#0C8577", "NORMAL"
-cap_marker_pos = 100 / 130.0 * 100
-ph_gauge.markdown(f"""
-<div style="background:var(--panel,#fff); border:1px solid #E1E6ED; border-radius:10px; padding:14px 20px 16px 20px;">
-    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
-        <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; color:#0B1220;">⏻ OVERALL LOAD METER</span>
-        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:{gauge_color};">{overall_util:.1f}% · {gauge_status}</span>
-    </div>
-    <div style="position:relative; height:14px; background:repeating-linear-gradient(90deg,#EEF2F6 0px,#EEF2F6 6px,#E4E9EF 6px,#E4E9EF 7px); border-radius:7px; overflow:hidden; border:1px solid #E1E6ED;">
-        <div style="position:absolute; left:0; top:0; height:100%; width:{gauge_fill:.2f}%; background:linear-gradient(90deg,{gauge_color}CC,{gauge_color}); border-radius:7px;"></div>
-        <div style="position:absolute; left:{cap_marker_pos:.2f}%; top:-2px; height:18px; width:2px; background:#0B1220;"></div>
-    </div>
-    <div style="display:flex; justify-content:space-between; margin-top:4px;">
-        <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#94A3B8;">0%</span>
-        <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#64748B;">100% CAP</span>
-        <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#94A3B8;">130%</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
 with col_chart:
     st.markdown("#### 📊 กราฟวิเคราะห์ Utilization & OEE")
     fig_bar = go.Figure()
-
-    def bar_color(val):
-        if val > 100: return '#DC2626'
-        if val >= 85: return '#D97706'
-        return '#0C8577'
-    bar_colors = [bar_color(val) for val in cfg['Utilization (%)']]
+    bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
     
     fig_bar.add_trace(go.Bar(
         x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
-        text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='inside',
-        textfont=dict(color='white', family="JetBrains Mono, monospace"),
+        text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='inside', textfont=dict(color='white'),
         hovertemplate="<b>%{x}</b><br>Utilization: %{y:.1f}%<extra></extra>"
     ))
     
     fig_bar.add_trace(go.Scatter(
         x=cfg['Machine Type'], y=cfg['OEE (%)'], mode='lines+markers', name="OEE (%)",
-        line=dict(color='#4F46E5', width=3, shape='spline'), 
+        line=dict(color='#f59e0b', width=3, shape='spline'), 
         marker=dict(size=8, symbol='diamond', line=dict(width=1, color='white')),
         hovertemplate="<b>%{x}</b><br>OEE: %{y:.1f}%<extra></extra>"
     ))
     
-    fig_bar.add_hline(y=100, line_dash="dash", line_color="#DC2626", line_width=2, 
+    fig_bar.add_hline(y=100, line_dash="dash", line_color="#ef4444", line_width=2, 
                       annotation_text="Max Capacity 100%", annotation_position="top left",
-                      annotation_font=dict(color="#DC2626", size=12, family="Inter, sans-serif"))
+                      annotation_font=dict(color="#ef4444", size=12))
     
     fig_bar.update_layout(height=450, margin=dict(t=20, b=50, l=0, r=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color="#0B1220"),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified")
     
-    fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(148,163,184,0.25)', rangemode='tozero')
-    fig_bar.update_xaxes(gridcolor='rgba(148,163,184,0.15)')
+    fig_bar.update_yaxes(title_text="Percentage (%)", gridcolor='rgba(200,200,200,0.2)', rangemode='tozero')
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.divider()
@@ -736,29 +547,22 @@ st.divider()
 col_donut_all, col_donut_ind = st.columns([1, 3])
 
 def create_donut(title, util_val, height=220):
-    if util_val > 100:
-        color = "#DC2626"
-    elif util_val >= 85:
-        color = "#D97706"
-    else:
-        color = "#0C8577"
+    color = "#ef4444" if util_val > 100 else "#10b981"
     visual_util = min(util_val, 100)
     remaining = max(100 - visual_util, 0)
     
     fig = go.Figure(data=[go.Pie(
         labels=['ใช้งานแล้ว', 'พื้นที่ว่าง'],
-        values=[visual_util, remaining], hole=0.72,
-        marker=dict(colors=[color, '#E1E6ED']), textinfo='none', hoverinfo='label'
+        values=[visual_util, remaining], hole=0.65,
+        marker=dict(colors=[color, '#e2e8f0']), textinfo='none', hoverinfo='label'
     )])
     
     font_size = 28 if height > 220 else 22
-    fig.add_annotation(text=f"<b>{util_val:.1f}%</b>", x=0.5, y=0.5, font_size=font_size, font_color=color,
-                        font_family="JetBrains Mono, monospace", showarrow=False)
+    fig.add_annotation(text=f"<b>{util_val:.1f}%</b>", x=0.5, y=0.5, font_size=font_size, font_color=color, showarrow=False)
     
-    layout_args = dict(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=height, paper_bgcolor="rgba(0,0,0,0)",
-                        font=dict(family="Inter, sans-serif"))
+    layout_args = dict(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=height, paper_bgcolor="rgba(0,0,0,0)")
     if title: 
-        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=15, color="#0B1220", family="Space Grotesk, sans-serif"))
+        layout_args['title'] = dict(text=title, x=0.5, font=dict(size=15, color="#1e293b"))
         layout_args['margin']['t'] = 40
     fig.update_layout(**layout_args)
     return fig
@@ -840,7 +644,7 @@ with col_deep2:
     df_down = df_trend[df_trend['% Change'] < -30].sort_values(by=['Req_Hours', '% Change'], ascending=[False, True]).head(8)
     
     def style_change(val):
-        color = '#0C8577' if val > 0 else '#DC2626' 
+        color = '#10b981' if val > 0 else '#ef4444' 
         return f'color: {color}; font-weight: bold'
     
     tab_up, tab_down = st.tabs(["🟢 แนวโน้มยอดเพิ่ม (Top 5 Up)", "🔴 แนวโน้มยอดลด (Top 5 Down)"])
