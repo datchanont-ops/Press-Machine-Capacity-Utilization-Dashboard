@@ -223,11 +223,8 @@ if not os.path.exists(db_file) or active_file is None:
     st.info("👋 กรุณาอัปโหลดไฟล์ **Data Upload (.xlsx)** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นใช้งาน")
     st.stop()
 
-# ประมวลผลข้อมูล
 mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file, active_file, wip_reduction_pct)
 if err: st.error(err); st.stop()
-
-# จัดรูปแบบเดือน
 month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
 
 # ==========================================
@@ -425,13 +422,11 @@ with tab_avail:
     col_title_avail, col_toggle = st.columns([3, 1])
     with col_title_avail:
         st.markdown("#### 📋 สรุปพื้นที่ว่างรองรับงานใหม่ (Available Capacity Report)")
-        st.caption("ข้อมูลนี้ช่วยให้ฝ่ายขายหรือฝ่ายวางแผน ทราบว่าเครื่องจักรแต่ละประเภทเหลือพื้นที่รับ New Part หรือ Order แทรกได้อีกเท่าไหร่")
+        st.caption("กราฟและตารางเพื่อประเมินความสามารถในการรับ New Part หรือ Order แทรก")
     
     with col_toggle:
-        # 📌 ปุ่มจำลองสถานการณ์ Max Capacity (กดแล้วไม่เซฟทับค่าจริง)
         simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องเต็มสูบ (ตั้งเปิดใช้ = มีทั้งหมด)", value=False)
     
-    # 📌 คำนวณหาค่าแบบสมมติ และแปลงเป็น Pandas Series เพื่อป้องกัน TypeError (.clip)
     mock_usable = pd.Series(cfg['Total Machines'] if simulate_max else cfg['Usable Machines'])
     mock_avail_hrs = pd.Series(mock_usable * cfg['Capacity_Per_Machine'])
     mock_util = pd.Series(np.where(mock_avail_hrs > 0, (cfg['Req_Hours'] / mock_avail_hrs) * 100.0, 0.0), index=cfg.index)
@@ -447,6 +442,31 @@ with tab_avail:
     })
     df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
     
+    # 📌 กราฟ Stacked Bar Chart แสดงสัดส่วนเครื่องจักรที่ใช้ไป vs เหลือว่าง
+    st.markdown("##### 📊 กราฟแสดงสัดส่วนการใช้เครื่องจักรและพื้นที่ว่าง")
+    fig_avail = go.Figure()
+    
+    fig_avail.add_trace(go.Bar(
+        x=df_avail['Machine Type'], y=df_avail['ใช้ไปจริง (เครื่อง)'], 
+        name='ใช้ไปแล้ว (เครื่อง)', marker_color='#3b82f6',
+        text=df_avail['ใช้ไปจริง (เครื่อง)'].apply(lambda x: f'{x:.1f}'), textposition='inside'
+    ))
+    fig_avail.add_trace(go.Bar(
+        x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (เครื่อง)'], 
+        name='เหลือว่าง (เครื่อง)', marker_color='#10b981',
+        text=df_avail['เหลือว่าง (เครื่อง)'].apply(lambda x: f'{x:.1f}' if x >= 0.1 else ''), textposition='inside'
+    ))
+    
+    fig_avail.update_layout(
+        barmode='stack', height=400, margin=dict(t=20, b=50, l=10, r=10),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+    )
+    fig_avail.update_yaxes(title_text="จำนวนเครื่อง (Units)", gridcolor='#e2e8f0')
+    st.plotly_chart(fig_avail, use_container_width=True)
+
+    # 📌 ตารางสรุปตัวเลขโดยละเอียด (เก็บไว้ให้ฝ่ายวางแผนดูเลขชั่วโมง)
+    st.markdown("##### 🧮 ตารางสรุปตัวเลขโดยละเอียด")
     def highlight_avail(row):
         color = '#15803d' if row['เหลือว่าง (%)'] > 20 else ('#b91c1c' if row['เหลือว่าง (%)'] == 0 else '#0f172a')
         return [f'color: {color}; font-weight: 600' if i >= 4 else '' for i in range(len(row))]
@@ -456,7 +476,7 @@ with tab_avail:
             'ตั้งเปิดใช้ (เครื่อง)': '{:.0f}', 'ใช้ไปจริง (เครื่อง)': '{:.1f}', 'ใช้ไป (%)': '{:.1f}%',
             'เหลือว่าง (เครื่อง)': '{:.1f}', 'เหลือว่าง (%)': '{:.1f}%', 'รับงานเพิ่มได้อีก (ชั่วโมง)': '{:,.0f} ชม.'
         }).apply(highlight_avail, axis=1),
-        use_container_width=True, hide_index=True, height=450
+        use_container_width=True, hide_index=True, height=350
     )
 
 st.divider()
