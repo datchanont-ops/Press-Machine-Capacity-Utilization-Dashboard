@@ -100,9 +100,32 @@ def load_specs():
     spec_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Curing Machine Data.xlsx')
     if os.path.exists(spec_file):
         try:
-            df = pd.read_excel(spec_file)
+            # ข้ามหัวตารางที่ว่าง 4 บรรทัดแรก (ใช้บรรทัดที่ 5 เป็นชื่อคอลัมน์)
+            df = pd.read_excel(spec_file, header=4)
+            
+            # ลบคอลัมน์ที่ไม่มีชื่อ (Unnamed) เช่นคอลัมน์ว่างด้านซ้ายสุด
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+            
+            # เปลี่ยนชื่อคอลัมน์ให้ตรงกับระบบอัตโนมัติ (M/C Type -> Machine Type)
+            col_renames = {}
+            for col in df.columns:
+                c_upper = str(col).strip().upper()
+                if "M/C" in c_upper or "MACHINE" in c_upper: col_renames[col] = "Machine Type"
+                elif "MODEL" in c_upper: col_renames[col] = "Model"
+                elif "VOLUME" in c_upper or "CC" in c_upper: col_renames[col] = "Volume CC"
+                elif "PRESSURE" in c_upper: col_renames[col] = "Pressure"
+                elif "PLATE" in c_upper: col_renames[col] = "PLATE"
+            
+            df = df.rename(columns=col_renames)
+            
+            # ทำความสะอาดข้อมูล ตัดแถวที่ว่างทิ้ง
+            df = df.dropna(how='all')
+            if 'Machine Type' in df.columns:
+                df = df.dropna(subset=['Machine Type'])
+                
             return df
-        except Exception:
+        except Exception as e:
+            st.warning(f"Warning: อ่านไฟล์ Spec ขัดข้อง ({e})")
             pass
     return pd.DataFrame()
 
@@ -115,6 +138,7 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
+        # อัปเดตจำนวนเครื่องจักรทั้งหมดตามตารางล่าสุด (74 Units)
         machine_updates = {
             "INJECT 1.6 L 500x600 HOT EM": 7, "INJ 2.5 L 500x600 200T EM": 2, "INJECT 1.6 L 500x600 COOL RUNNER VA": 9,
             "INJECT 1.6 L 500x600 COOL RUNNER TMA": 5, "INJECT 1.6 L 600x600 COOL RUNNER VC": 10,
@@ -256,6 +280,8 @@ if not os.path.exists(db_file) or active_file is None:
 mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file, active_file, wip_reduction_pct)
 if err: st.error(err); st.stop()
 month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
+
+# เรียกใช้ข้อมูล Spec (เวอร์ชันปรับปรุงข้ามหัวตาราง)
 df_specs = load_specs()
 
 # ==========================================
@@ -273,7 +299,7 @@ with col_spec:
         if not df_specs.empty:
             st.dataframe(df_specs, hide_index=True, use_container_width=True)
         else:
-            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data.xlsx' กรุณานำไฟล์มาวางไว้ในระบบ")
+            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data.xlsx' หรือไฟล์ไม่มีข้อมูลที่อ่านได้")
 
 export_placeholder = col_export.empty()
 
@@ -283,14 +309,14 @@ export_placeholder = col_export.empty()
 cfg = mach_summary.copy()
 cfg['Hours/Shift'] = 7.0
 
-# 📌 รวมข้อมูล Spec เครื่องจักรเข้ากับตารางหลัก (เพื่อใช้ในการ Filter/Group by)
+# รวมข้อมูล Spec เข้ากับตารางหลัก (เพื่อใช้ในการ Filter/Group by)
 if not df_specs.empty and 'Machine Type' in df_specs.columns:
     df_specs['Machine Type'] = df_specs['Machine Type'].astype(str).str.strip().str.upper()
     cfg['Machine Type_Match'] = cfg['Machine Type'].astype(str).str.strip().str.upper()
     cfg = pd.merge(cfg, df_specs, left_on='Machine Type_Match', right_on='Machine Type', how='left', suffixes=('', '_spec'))
     cfg = cfg.drop(columns=['Machine Type_Match', 'Machine Type_spec'], errors='ignore')
 
-# 📌 ตรวจสอบและสร้างคอลัมน์เผื่อไว้ กรณีไฟล์ Spec ไม่มีคอลัมน์ที่ต้องการ
+# ตรวจสอบและสร้างคอลัมน์เผื่อไว้ กรณีไฟล์ Spec ไม่มีคอลัมน์ที่ต้องการ
 for col in ['Model', 'Volume CC', 'Pressure', 'PLATE']:
     if col not in cfg.columns:
         cfg[col] = 'N/A'
@@ -367,7 +393,7 @@ cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] 
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
 # ==========================================
-# 🎛️ DYNAMIC FILTER & GROUPING (NEW FEATURE)
+# 🎛️ DYNAMIC FILTER & GROUPING 
 # ==========================================
 st.markdown("### 🔍 มุมมองข้อมูล (Data Perspective)")
 view_by = st.radio("เลือกจัดกลุ่มข้อมูลตาม:", ['Machine Type', 'Model', 'Volume CC', 'Pressure', 'PLATE'], horizontal=True)
@@ -442,8 +468,6 @@ with tab_util:
 
 with tab_oee:
     st.markdown(f"#### ประสิทธิภาพเครื่องจักร OEE (เฉลี่ยตาม {view_by})")
-    
-    # คำนวณ OEE เฉลี่ยตาม View ที่เลือก
     cfg_oee_view = cfg.groupby(view_by, as_index=False).agg({'OEE (%)': 'mean'}).sort_values(by='OEE (%)', ascending=True)
     
     fig_oee = go.Figure(go.Bar(
@@ -493,7 +517,6 @@ with tab_avail:
     with col_toggle:
         simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องเต็มสูบ (มีเท่าไหร่ใช้หมด)", value=False)
     
-    # คำนวณจำลองสเกลรายเครื่องก่อน แล้วค่อย Group by ตามที่เลือก
     mock_usable = cfg['Total Machines'] if simulate_max else cfg['Usable Machines']
     mock_avail_hrs = mock_usable * cfg['Capacity_Per_Machine']
     mock_req_machines = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
