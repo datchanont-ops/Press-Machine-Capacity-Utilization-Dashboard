@@ -104,6 +104,16 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
+        # 📌 1. เพิ่มเครื่องจักร INJECT 2.5 L 700x700 COOL RUNNER VJ (5 เครื่อง)
+        new_machine_name = "INJECT 2.5 L 700x700 COOL RUNNER VJ"
+        if new_machine_name not in mc_data['Machine Type'].values:
+            new_row = pd.DataFrame([{
+                'Machine Type': new_machine_name, 
+                'จำนวนเครื่องทั้งหมด': 5, 
+                'จำนวนเครื่องที่ให้ใช้ได้': 5
+            }])
+            mc_data = pd.concat([mc_data, new_row], ignore_index=True)
+
         wip_fg['Material'] = wip_fg['Material'].astype(str).str.replace(r';A1$', '', regex=True).str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
         
@@ -285,7 +295,7 @@ with st.expander("🎛️ **แผงควบคุมกำลังผลิ�
     st.markdown("---")
     h1, h2, h3, h4, h5, h6 = st.columns([3, 1, 1, 1, 1, 1])
     h1.markdown("**Machine Type**")
-    h2.markdown("**ทั้งหมด (M/c)**")
+    h2.markdown("**มี (Mcs)**")
     h3.markdown("**เปิดใช้**")
     h4.markdown("**กะ/วัน**")
     h5.markdown("**OEE (%)**")
@@ -331,7 +341,8 @@ with export_placeholder.container():
 # ==========================================
 # 📈 1. Executive Summary (KPIs)
 # ==========================================
-total_machines_all = 66
+# 📌 อัปเดต Total Machines ให้ดึงจากข้อมูลจริงแทนการล็อคเลข 66
+total_machines_all = int(cfg['Total Machines'].sum())
 total_req, total_avail = cfg['Req_Hours'].sum(), cfg['Available Hours'].sum()
 overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
 over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
@@ -425,7 +436,7 @@ with tab_avail:
         st.caption("กราฟและตารางเพื่อประเมินความสามารถในการรับ New Part หรือ Order แทรก")
     
     with col_toggle:
-        simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องทั้งหมด (ตั้งเปิดใช้ = มีทั้งหมด)", value=False)
+        simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องเต็มสูบ (ตั้งเปิดใช้ = มีทั้งหมด)", value=False)
     
     mock_usable = pd.Series(cfg['Total Machines'] if simulate_max else cfg['Usable Machines'])
     mock_avail_hrs = pd.Series(mock_usable * cfg['Capacity_Per_Machine'])
@@ -442,12 +453,10 @@ with tab_avail:
     })
     df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
     
-    # 📌 อัปเดต: กราฟ Stacked Bar (รวม) แบบ 2 แกน พร้อมกราฟเส้น % เหลือว่าง
     st.markdown("##### 📊 กราฟแสดงสัดส่วนเครื่องทั้งหมด (% เหลือใช้)")
     
     fig_avail = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # 1. แท่ง "ใช้ไปแล้ว"
     fig_avail.add_trace(go.Bar(
         x=df_avail['Machine Type'], y=df_avail['ใช้ไปจริง (เครื่อง)'], 
         name='ใช้ไปแล้ว (เครื่อง)', marker_color='#3b82f6',
@@ -455,7 +464,6 @@ with tab_avail:
         hovertemplate="<b>%{x}</b><br>ใช้ไปแล้ว: %{y:.1f} เครื่อง<extra></extra>"
     ), secondary_y=False)
     
-    # 2. แท่ง "เหลือว่าง" (นำไปซ้อนทับกัน จะได้ความสูงเท่ากับจำนวนเครื่องที่เปิดใช้ทั้งหมด)
     fig_avail.add_trace(go.Bar(
         x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (เครื่อง)'], 
         name='เหลือว่าง (เครื่อง)', marker_color='#10b981',
@@ -463,7 +471,6 @@ with tab_avail:
         hovertemplate="<b>%{x}</b><br>เหลือว่าง: %{y:.1f} เครื่อง<extra></extra>"
     ), secondary_y=False)
     
-    # 3. กราฟเส้นแสดง "เปอร์เซ็นต์พื้นที่เหลือว่าง" (แกน Y ฝั่งขวา)
     fig_avail.add_trace(go.Scatter(
         x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (%)'],
         name='% เหลือว่าง', mode='lines+markers',
@@ -485,7 +492,6 @@ with tab_avail:
     
     st.plotly_chart(fig_avail, use_container_width=True)
 
-    # 📌 ตารางสรุปตัวเลข
     st.markdown("##### 🧮 ตารางสรุปตัวเลขโดยละเอียด")
     def highlight_avail(row):
         color = '#15803d' if row['เหลือว่าง (%)'] > 20 else ('#b91c1c' if row['เหลือว่าง (%)'] == 0 else '#0f172a')
@@ -513,7 +519,7 @@ top_5_best = cfg_sorted_util.tail(5).sort_values(by='Utilization (%)', ascending
 col_rank1, col_rank2 = st.columns(2)
 
 with col_rank1:
-    st.markdown("<div style='background-color:#fee2e2; padding:10px; border-radius:8px;'><h4 style='color:#b91c1c; margin:0;'>🔴 Top 5 เครื่องที่ทำงานมากที่สุด (Overloaded)</h4></div>", unsafe_allow_html=True)
+    st.markdown("<div style='background-color:#fee2e2; padding:10px; border-radius:8px;'><h4 style='color:#b91c1c; margin:0;'>🔴 Top 5 เครื่องที่ทำงานหนักที่สุด (Overloaded)</h4></div>", unsafe_allow_html=True)
     st.caption("เครื่องจักรที่มีอัตรา Utilization สูงสุด (เสี่ยงคอขวด / ผลิตไม่ทัน)")
     
     fig_t5 = px.bar(top_5_worst, x='Utilization (%)', y='Machine Type', orientation='h', text_auto='.1f', color_discrete_sequence=['#ef4444'])
@@ -521,7 +527,7 @@ with col_rank1:
     st.plotly_chart(fig_t5, use_container_width=True)
 
 with col_rank2:
-    st.markdown("<div style='background-color:#dcfce3; padding:10px; border-radius:8px;'><h4 style='color:#15803d; margin:0;'>🟢 Top 5 เครื่องที่น้อยที่สุด (Underutilized)</h4></div>", unsafe_allow_html=True)
+    st.markdown("<div style='background-color:#dcfce3; padding:10px; border-radius:8px;'><h4 style='color:#15803d; margin:0;'>🟢 Top 5 เครื่องที่ว่างงานที่สุด (Underutilized)</h4></div>", unsafe_allow_html=True)
     st.caption("เครื่องจักรที่มีอัตรา Utilization ต่ำที่สุด (มีพื้นที่รองรับงานเพิ่มได้)")
     
     fig_b5 = px.bar(top_5_best, x='Utilization (%)', y='Machine Type', orientation='h', text_auto='.1f', color_discrete_sequence=['#10b981'])
@@ -558,7 +564,7 @@ with col_deep2:
     
     def style_change(val): return f'color: {"#15803d" if val > 0 else "#b91c1c"}; font-weight: bold'
     
-    t_up, t_down = st.tabs(["🚀 ขึ้น (Up Trend)", "📉 ลง (Down Trend)"])
+    t_up, t_down = st.tabs(["🚀 ขาขึ้น (Up Trend)", "📉 ขาลง (Down Trend)"])
     cols_disp = ['Material', 'Max_N_minus_1', 'Max_N', 'Max_N1', '% Change', 'Req_Hours']
     with t_up:
         st.dataframe(df_up[cols_disp].style.format({'Max_N_minus_1':'{:,.0f}', 'Max_N':'{:,.0f}', 'Max_N1':'{:,.0f}', '% Change':'{:+.1f}%', 'Req_Hours':'{:.1f}'}).map(style_change, subset=['% Change']), hide_index=True, use_container_width=True)
