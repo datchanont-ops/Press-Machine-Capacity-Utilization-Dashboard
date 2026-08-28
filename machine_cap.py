@@ -106,17 +106,32 @@ def load_specs():
             # ลบคอลัมน์ที่ไม่มีชื่อ (Unnamed) เช่นคอลัมน์ว่างด้านซ้ายสุด
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             
-            # เปลี่ยนชื่อคอลัมน์ให้ตรงกับระบบอัตโนมัติ (M/C Type -> Machine Type)
+            # เปลี่ยนชื่อคอลัมน์ ป้องกันคอลัมน์ชื่อซ้ำกัน
             col_renames = {}
+            seen = set()
             for col in df.columns:
                 c_upper = str(col).strip().upper()
-                if "M/C" in c_upper or "MACHINE" in c_upper: col_renames[col] = "Machine Type"
-                elif "MODEL" in c_upper: col_renames[col] = "Model"
-                elif "VOLUME" in c_upper or "CC" in c_upper: col_renames[col] = "Volume CC"
-                elif "PRESSURE" in c_upper: col_renames[col] = "Pressure"
-                elif "PLATE" in c_upper: col_renames[col] = "PLATE"
+                target = None
+                
+                if ("M/C" in c_upper or "MACHINE" in c_upper) and "Machine Type" not in seen:
+                    target = "Machine Type"
+                elif "MODEL" in c_upper and "Model" not in seen:
+                    target = "Model"
+                elif ("VOLUME" in c_upper or "CC" in c_upper) and "Volume CC" not in seen:
+                    target = "Volume CC"
+                elif "PRESSURE" in c_upper and "Pressure" not in seen:
+                    target = "Pressure"
+                elif "PLATE" in c_upper and "PLATE" not in seen:
+                    target = "PLATE"
+                
+                if target:
+                    col_renames[col] = target
+                    seen.add(target)
             
             df = df.rename(columns=col_renames)
+            
+            # ลบคอลัมน์ชื่อซ้ำที่อาจหลงเหลืออยู่ (แก้ปัญหา ValueError)
+            df = df.loc[:, ~df.columns.duplicated()]
             
             # ทำความสะอาดข้อมูล ตัดแถวที่ว่างทิ้ง
             df = df.dropna(how='all')
@@ -138,7 +153,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
-        # อัปเดตจำนวนเครื่องจักรทั้งหมดตามตารางล่าสุด (74 Units)
         machine_updates = {
             "INJECT 1.6 L 500x600 HOT EM": 7, "INJ 2.5 L 500x600 200T EM": 2, "INJECT 1.6 L 500x600 COOL RUNNER VA": 9,
             "INJECT 1.6 L 500x600 COOL RUNNER TMA": 5, "INJECT 1.6 L 600x600 COOL RUNNER VC": 10,
@@ -281,7 +295,7 @@ mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file,
 if err: st.error(err); st.stop()
 month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
 
-# เรียกใช้ข้อมูล Spec (เวอร์ชันปรับปรุงข้ามหัวตาราง)
+# ดึงข้อมูล Spec พร้อมตรวจสอบป้องกัน Error
 df_specs = load_specs()
 
 # ==========================================
@@ -297,9 +311,10 @@ with col_spec:
     with st.popover("📋 Machine Specs", use_container_width=True):
         st.markdown("#### 📖 ข้อมูลจำเพาะเครื่องจักร (Machine Specs)")
         if not df_specs.empty:
+            # เพิ่มคอลัมน์ Index อัตโนมัติและแสดงผล
             st.dataframe(df_specs, hide_index=True, use_container_width=True)
         else:
-            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data.xlsx' หรือไฟล์ไม่มีข้อมูลที่อ่านได้")
+            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data.xlsx' หรือตารางข้อมูลไม่ถูกต้อง")
 
 export_placeholder = col_export.empty()
 
@@ -309,14 +324,14 @@ export_placeholder = col_export.empty()
 cfg = mach_summary.copy()
 cfg['Hours/Shift'] = 7.0
 
-# รวมข้อมูล Spec เข้ากับตารางหลัก (เพื่อใช้ในการ Filter/Group by)
 if not df_specs.empty and 'Machine Type' in df_specs.columns:
-    df_specs['Machine Type'] = df_specs['Machine Type'].astype(str).str.strip().str.upper()
+    df_specs_clean = df_specs.copy()
+    df_specs_clean['Machine Type'] = df_specs_clean['Machine Type'].astype(str).str.strip().str.upper()
     cfg['Machine Type_Match'] = cfg['Machine Type'].astype(str).str.strip().str.upper()
-    cfg = pd.merge(cfg, df_specs, left_on='Machine Type_Match', right_on='Machine Type', how='left', suffixes=('', '_spec'))
+    
+    cfg = pd.merge(cfg, df_specs_clean, left_on='Machine Type_Match', right_on='Machine Type', how='left', suffixes=('', '_spec'))
     cfg = cfg.drop(columns=['Machine Type_Match', 'Machine Type_spec'], errors='ignore')
 
-# ตรวจสอบและสร้างคอลัมน์เผื่อไว้ กรณีไฟล์ Spec ไม่มีคอลัมน์ที่ต้องการ
 for col in ['Model', 'Volume CC', 'Pressure', 'PLATE']:
     if col not in cfg.columns:
         cfg[col] = 'N/A'
@@ -398,13 +413,8 @@ cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours']
 st.markdown("### 🔍 มุมมองข้อมูล (Data Perspective)")
 view_by = st.radio("เลือกจัดกลุ่มข้อมูลตาม:", ['Machine Type', 'Model', 'Volume CC', 'Pressure', 'PLATE'], horizontal=True)
 
-# แปลงตาราง cfg ให้จับกลุ่มตามสิ่งที่ User เลือก
 cfg_view = cfg.groupby(view_by, as_index=False).agg({
-    'Total Machines': 'sum',
-    'Usable Machines': 'sum',
-    'Req_Hours': 'sum',
-    'Available Hours': 'sum',
-    'Req_Machines': 'sum'
+    'Total Machines': 'sum', 'Usable Machines': 'sum', 'Req_Hours': 'sum', 'Available Hours': 'sum', 'Req_Machines': 'sum'
 })
 cfg_view['Utilization (%)'] = np.where(cfg_view['Available Hours'] > 0, (cfg_view['Req_Hours'] / cfg_view['Available Hours']) * 100.0, 0.0)
 
