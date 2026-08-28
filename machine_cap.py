@@ -155,6 +155,15 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
+        # 📌 ฟังก์ชันจัดการชื่อให้สะอาด (ลบเว้นวรรคเกิน ป้องกันชื่อซ้ำ)
+        def clean_mname(val):
+            if pd.isna(val) or str(val).lower() == 'nan': return val
+            return re.sub(r'\s+', ' ', str(val)).strip()
+
+        mc_data['Machine Type'] = mc_data['Machine Type'].apply(clean_mname)
+        mc_data = mc_data.drop_duplicates(subset=['Machine Type'], keep='first')
+        capacity['Machine Type'] = capacity['Machine Type'].apply(clean_mname)
+
         machine_updates = {
             "INJECT 1.6 L 500x600 HOT EM": 7, "INJ 2.5 L 500x600 200T EM": 2, "INJECT 1.6 L 500x600 COOL RUNNER VA": 9,
             "INJECT 1.6 L 500x600 COOL RUNNER TMA": 5, "INJECT 1.6 L 600x600 COOL RUNNER VC": 10,
@@ -164,15 +173,19 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         }
         
         for m_name, m_count in machine_updates.items():
+            m_name_clean = clean_mname(m_name)
             matched = False
             for existing_name in mc_data['Machine Type'].dropna().unique():
-                if str(existing_name).strip().upper() == str(m_name).strip().upper():
+                if str(existing_name).upper() == m_name_clean.upper():
                     mc_data.loc[mc_data['Machine Type'] == existing_name, 'จำนวนเครื่องทั้งหมด'] = m_count
                     matched = True
                     break
             if not matched:
-                new_row = pd.DataFrame([{'Machine Type': m_name, 'จำนวนเครื่องทั้งหมด': m_count, 'จำนวนเครื่องที่ให้ใช้ได้': m_count}])
+                new_row = pd.DataFrame([{'Machine Type': m_name_clean, 'จำนวนเครื่องทั้งหมด': m_count, 'จำนวนเครื่องที่ให้ใช้ได้': m_count}])
                 mc_data = pd.concat([mc_data, new_row], ignore_index=True)
+                
+        # 📌 เคลียร์ตัวซ้ำอีกรอบเผื่อมีหลุดมา
+        mc_data = mc_data.drop_duplicates(subset=['Machine Type'], keep='first')
 
         wip_fg['Material'] = wip_fg['Material'].astype(str).str.replace(r';A1$', '', regex=True).str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
@@ -305,7 +318,7 @@ df_specs, spec_err = load_specs()
 # ==========================================
 col_header, col_spec, col_export = st.columns([2.5, 0.7, 0.7])
 with col_header:
-    st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Pro <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Utilization <span style='color: #3b82f6; margin-left: 8px;'>Pro</span> <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748b; font-size: 15px;'>ระบบวิเคราะห์และวางแผนกำลังการผลิตขั้นสูงสำหรับเครื่องจักร Press</p>", unsafe_allow_html=True)
 
 with col_spec:
@@ -524,6 +537,7 @@ with tab_avail:
     df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
     
     st.markdown("##### 📊 กราฟแสดงสัดส่วนเครื่องทั้งหมด (% เหลือใช้)")
+    
     fig_avail = make_subplots(specs=[[{"secondary_y": True}]])
     
     fig_avail.add_trace(go.Bar(
