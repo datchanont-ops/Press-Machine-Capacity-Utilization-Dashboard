@@ -124,7 +124,6 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         
         # ค้นหาและอัปเดต หรือ เพิ่มเครื่องใหม่หากไม่มีใน Data base.xlsx
         for m_name, m_count in machine_updates.items():
-            # พยายาม match ชื่อแบบยืดหยุ่น (เผื่อมีการเว้นวรรคเกิน)
             matched = False
             for existing_name in mc_data['Machine Type'].dropna().unique():
                 if str(existing_name).strip().upper() == str(m_name).strip().upper():
@@ -197,6 +196,34 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         return None, None, 0, "", f"System Error: {str(e)}"
 
 # ==========================================
+# 📋 โหลดข้อมูล Spec เครื่องจักร (New)
+# ==========================================
+@st.cache_data
+def load_specs():
+    spec_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Curing Machine Data_2.xlsx')
+    if os.path.exists(spec_file):
+        try:
+            # ลองอ่านแบบข้ามบรรทัดหัวกระดาษ 4 บรรทัดแรก
+            df = pd.read_excel(spec_file, header=4)
+            # ตัดคอลัมน์ที่เป็น Unnamed ออกไปให้หมด
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+            
+            # ตรวจสอบว่าตารางอ่านถูกไหม ถ้าคอลัมน์หายไปเยอะ ให้ลองอ่านแบบปกติ
+            if df.empty or len(df.columns) < 2:
+                df = pd.read_excel(spec_file)
+                df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+                
+            # ลบคอลัมน์ที่ชื่อซ้ำกันออกไป ป้องกันบั๊ก DataFrame Arrow
+            df = df.loc[:, ~df.columns.duplicated()]
+            
+            # ตัดบรรทัดที่ว่างเปล่าทั้งหมดทิ้งไป
+            df = df.dropna(how='all')
+            return df
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+# ==========================================
 # Sidebar Settings
 # ==========================================
 with st.sidebar:
@@ -263,13 +290,25 @@ mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file,
 if err: st.error(err); st.stop()
 month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
 
+# เรียกใช้ข้อมูล Spec เพื่อนำไปแสดงผล
+df_specs = load_specs()
+
 # ==========================================
-# Main Dashboard Header (Dynamic)
+# Main Dashboard Header (Dynamic & Pop-ups)
 # ==========================================
-col_header, col_export = st.columns([4, 1])
+col_header, col_spec, col_export = st.columns([2.5, 0.7, 0.7])
 with col_header:
     st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Utilization <span style='color: #3b82f6; margin-left: 8px;'>Pro</span> <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748b; font-size: 15px;'>ระบบวิเคราะห์และวางแผนกำลังการผลิตขั้นสูงสำหรับเครื่องจักร Press</p>", unsafe_allow_html=True)
+
+with col_spec:
+    st.write("") # ดันปุ่มลงมาให้ตรงกับกล่องด้านข้าง
+    with st.popover("📋 Machine Specs", use_container_width=True):
+        st.markdown("#### 📖 ข้อมูลจำเพาะเครื่องจักร (Machine Specs)")
+        if not df_specs.empty:
+            st.dataframe(df_specs, hide_index=True, use_container_width=True)
+        else:
+            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data_2.xlsx' หรือตารางข้อมูลไม่ถูกต้อง")
 
 export_placeholder = col_export.empty()
 
