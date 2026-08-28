@@ -442,30 +442,50 @@ with tab_avail:
     })
     df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
     
-    # 📌 กราฟ Stacked Bar Chart แสดงสัดส่วนเครื่องจักรที่ใช้ไป vs เหลือว่าง
-    st.markdown("##### 📊 กราฟแสดงสัดส่วนการใช้เครื่องจักรและพื้นที่ว่าง")
-    fig_avail = go.Figure()
+    # 📌 อัปเดต: กราฟ Stacked Bar (รวม) แบบ 2 แกน พร้อมกราฟเส้น % เหลือว่าง
+    st.markdown("##### 📊 กราฟแสดงสัดส่วนเครื่องทั้งหมด (% เหลือใช้)")
     
+    fig_avail = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    # 1. แท่ง "ใช้ไปแล้ว"
     fig_avail.add_trace(go.Bar(
         x=df_avail['Machine Type'], y=df_avail['ใช้ไปจริง (เครื่อง)'], 
         name='ใช้ไปแล้ว (เครื่อง)', marker_color='#3b82f6',
-        text=df_avail['ใช้ไปจริง (เครื่อง)'].apply(lambda x: f'{x:.1f}'), textposition='inside'
-    ))
+        text=df_avail['ใช้ไปจริง (เครื่อง)'].apply(lambda x: f'{x:.1f}'), textposition='inside',
+        hovertemplate="<b>%{x}</b><br>ใช้ไปแล้ว: %{y:.1f} เครื่อง<extra></extra>"
+    ), secondary_y=False)
+    
+    # 2. แท่ง "เหลือว่าง" (นำไปซ้อนทับกัน จะได้ความสูงเท่ากับจำนวนเครื่องที่เปิดใช้ทั้งหมด)
     fig_avail.add_trace(go.Bar(
         x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (เครื่อง)'], 
         name='เหลือว่าง (เครื่อง)', marker_color='#10b981',
-        text=df_avail['เหลือว่าง (เครื่อง)'].apply(lambda x: f'{x:.1f}' if x >= 0.1 else ''), textposition='inside'
-    ))
+        text=df_avail['เหลือว่าง (เครื่อง)'].apply(lambda x: f'{x:.1f}' if x >= 0.1 else ''), textposition='inside',
+        hovertemplate="<b>%{x}</b><br>เหลือว่าง: %{y:.1f} เครื่อง<extra></extra>"
+    ), secondary_y=False)
+    
+    # 3. กราฟเส้นแสดง "เปอร์เซ็นต์พื้นที่เหลือว่าง" (แกน Y ฝั่งขวา)
+    fig_avail.add_trace(go.Scatter(
+        x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (%)'],
+        name='% เหลือว่าง', mode='lines+markers',
+        line=dict(color='#f59e0b', width=3, shape='spline'),
+        marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
+        text=df_avail['เหลือว่าง (%)'].apply(lambda x: f'{x:.1f}%'), textposition='top center',
+        hovertemplate="<b>%{x}</b><br>เหลือว่าง: %{y:.1f}%<extra></extra>"
+    ), secondary_y=True)
     
     fig_avail.update_layout(
-        barmode='stack', height=400, margin=dict(t=20, b=50, l=10, r=10),
+        barmode='stack', height=450, margin=dict(t=20, b=50, l=10, r=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        hovermode="x unified"
     )
-    fig_avail.update_yaxes(title_text="จำนวนเครื่อง (Units)", gridcolor='#e2e8f0')
+    
+    fig_avail.update_yaxes(title_text="จำนวนเครื่อง (Units)", gridcolor='#e2e8f0', secondary_y=False)
+    fig_avail.update_yaxes(title_text="เปอร์เซ็นต์เหลือว่าง (%)", showgrid=False, secondary_y=True, range=[0, 110])
+    
     st.plotly_chart(fig_avail, use_container_width=True)
 
-    # 📌 ตารางสรุปตัวเลขโดยละเอียด (เก็บไว้ให้ฝ่ายวางแผนดูเลขชั่วโมง)
+    # 📌 ตารางสรุปตัวเลข
     st.markdown("##### 🧮 ตารางสรุปตัวเลขโดยละเอียด")
     def highlight_avail(row):
         color = '#15803d' if row['เหลือว่าง (%)'] > 20 else ('#b91c1c' if row['เหลือว่าง (%)'] == 0 else '#0f172a')
