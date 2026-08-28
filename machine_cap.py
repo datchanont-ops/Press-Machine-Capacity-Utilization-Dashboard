@@ -67,58 +67,28 @@ def gh_put_file(remote_path, content_bytes, message):
 # ==========================================
 st.markdown("""
 <style>
-    /* Global Font & Background */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-        background-color: #f8fafc;
-    }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     
-    /* Modern Metric Cards */
     [data-testid="stMetric"] {
-        background-color: #ffffff;
-        padding: 20px 24px;
-        border-radius: 12px;
-        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.04);
-        border: 1px solid #f1f5f9;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        position: relative;
-        overflow: hidden;
+        background-color: #ffffff; padding: 20px 24px; border-radius: 12px;
+        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.04); border: 1px solid #f1f5f9;
+        transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; overflow: hidden;
     }
-    [data-testid="stMetric"]:hover {
-        transform: translateY(-3px);
-        box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.08);
-    }
-    /* Adding colored accent lines to cards */
-    [data-testid="stMetric"]::before {
-        content: ''; position: absolute; top: 0; left: 0; width: 6px; height: 100%;
-    }
+    [data-testid="stMetric"]:hover { transform: translateY(-3px); box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.08); }
+    [data-testid="stMetric"]::before { content: ''; position: absolute; top: 0; left: 0; width: 6px; height: 100%; }
+    
     div[data-testid="column"]:nth-child(1) [data-testid="stMetric"]::before { background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%); }
     div[data-testid="column"]:nth-child(2) [data-testid="stMetric"]::before { background: linear-gradient(180deg, #10b981 0%, #059669 100%); }
     div[data-testid="column"]:nth-child(3) [data-testid="stMetric"]::before { background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%); }
     div[data-testid="column"]:nth-child(4) [data-testid="stMetric"]::before { background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%); }
 
-    /* Clean up expanders and tabs */
-    .streamlit-expanderHeader {
-        font-weight: 600 !important;
-        color: #1e293b !important;
-        background-color: #f1f5f9;
-        border-radius: 8px;
-    }
+    .streamlit-expanderHeader { font-weight: 600 !important; color: #1e293b !important; background-color: #f1f5f9; border-radius: 8px; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #ffffff; border-radius: 6px 6px 0 0;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.02); padding: 10px 20px;
-    }
+    .stTabs [data-baseweb="tab"] { background-color: #ffffff; border-radius: 6px 6px 0 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.02); padding: 10px 20px; }
     
-    /* Headers */
     h1, h2, h3 { color: #0f172a; font-weight: 800; tracking: -0.02em; }
-    
-    /* Hide specific elements on print */
-    @media print {
-        .stPopover, .stExpander, header, [data-testid="stSidebar"] { display: none !important; }
-        body { background-color: white !important; }
-    }
+    @media print { .stPopover, .stExpander, header, [data-testid="stSidebar"] { display: none !important; } body { background-color: white !important; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,16 +155,17 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         mach_summary = pd.merge(mach_summary, req_by_mach, on='Machine Type', how='left').fillna(0)
 
         df_detail = df[['Material', 'Description', 'Max_N_minus_1', 'Max_N', 'Max_N1', 'Max_N_Amt', 'Req_Qty', 'Semi Part', 'Machine Type', 'Req_Hours']].copy()
-        return mach_summary, df_detail, total_sales_n, None
+        
+        # คืนค่าตัวแปรเดือน (m_n_str) ออกไปใช้งานข้างนอก
+        return mach_summary, df_detail, total_sales_n, m_n_str, None
     except Exception as e:
-        return None, None, 0, f"System Error: {str(e)}"
+        return None, None, 0, "", f"System Error: {str(e)}"
 
 # ==========================================
 # Sidebar Settings
 # ==========================================
 with st.sidebar:
     st.markdown("### ⚙️ Control Panel")
-    
     db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data base.xlsx')
     saved_up_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_data_upload.xlsx')
     settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'machine_settings.json')
@@ -209,7 +180,6 @@ with st.sidebar:
         st.session_state["github_synced"] = True
 
     uploaded_up = st.file_uploader("📂 Upload Monthly Data (.xlsx)", type=["xlsx", "xls"])
-
     saved_data_settings = {}
     if os.path.exists(data_settings_file):
         try:
@@ -231,8 +201,7 @@ with st.sidebar:
         if st.session_state.get("last_saved_signature") != file_signature:
             file_bytes = bytes(uploaded_up.getbuffer())
             with open(saved_up_file, "wb") as f: f.write(file_bytes)
-            if GITHUB_ENABLED:
-                gh_put_file(f"{GITHUB_DATA_DIR}/saved_data_upload.xlsx", file_bytes, f"Auto-save: {uploaded_up.name}")
+            if GITHUB_ENABLED: gh_put_file(f"{GITHUB_DATA_DIR}/saved_data_upload.xlsx", file_bytes, f"Auto-save: {uploaded_up.name}")
             st.session_state["last_saved_signature"] = file_signature
             st.toast("✅ File Uploaded & Synced")
 
@@ -248,21 +217,30 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# Main Dashboard Header
+# Application Start (Validation)
 # ==========================================
-col_header, col_export = st.columns([4, 1])
-with col_header:
-    st.markdown("<h2 style='margin-bottom: 0px;'>📊 Press Capacity Utilization <span style='color: #3b82f6;'>Pro</span></h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #64748b; font-size: 15px;'>ระบบวิเคราะห์และวางแผนกำลังการผลิตขั้นสูงสำหรับเครื่องจักร Press</p>", unsafe_allow_html=True)
-
-export_placeholder = col_export.empty()
-
 if not os.path.exists(db_file) or active_file is None:
+    st.markdown("<h2 style='margin-bottom: 0px;'>📊 Press Capacity Utilization <span style='color: #3b82f6;'>Pro</span></h2>", unsafe_allow_html=True)
     st.info("👋 กรุณาอัปโหลดไฟล์ **Data Upload (.xlsx)** ประจำเดือนที่แถบด้านซ้ายมือ เพื่อเริ่มต้นใช้งาน")
     st.stop()
 
-mach_summary, df_detail, total_sales_n, err = load_and_process(db_file, active_file, wip_reduction_pct)
+# ประมวลผลข้อมูล (และดึงเดือนออกมาด้วย)
+mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file, active_file, wip_reduction_pct)
 if err: st.error(err); st.stop()
+
+# จัดรูปแบบเดือนให้แสดงผลสวยงาม (จาก '09.2026' -> 'Sep26')
+month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
+
+# ==========================================
+# Main Dashboard Header (Dynamic)
+# ==========================================
+col_header, col_export = st.columns([4, 1])
+with col_header:
+    # เพิ่มป้ายกำกับเดือน (Badge) ไปที่ส่วนท้ายของหัวข้อ
+    st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Utilization <span style='color: #3b82f6; margin-left: 8px;'>Pro</span> <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748b; font-size: 15px;'>ระบบวิเคราะห์และวางแผนกำลังการผลิตขั้นสูงสำหรับเครื่องจักร Press</p>", unsafe_allow_html=True)
+
+export_placeholder = col_export.empty()
 
 # ==========================================
 # Initialize Machine Settings
@@ -299,11 +277,9 @@ for idx, row in cfg.iterrows():
     if f"ot_{mt}" not in st.session_state: st.session_state[f"ot_{mt}"] = int(saved_ot.get(mt, 0))
 
 # ==========================================
-# Interactive Adjustments (Hidden in Expander for cleanliness)
+# Interactive Adjustments
 # ==========================================
 with st.expander("🎛️ **แผงควบคุมกำลังผลิตรายเครื่อง (Machine Configuration)**", expanded=False):
-    st.info("💡 ปรับจำนวนกะ, OEE หรือเพิ่ม OT เพื่อลดปัญหา Over Capacity ได้ทันที")
-    
     b1, b2, b3 = st.columns([2, 1, 1])
     bulk_oee = b1.number_input("🔄 ตั้งค่า OEE เท่ากันทุกเครื่อง (%)", value=85, min_value=1, max_value=100)
     if b2.button("✨ นำไปใช้กับทุกเครื่อง", use_container_width=True):
@@ -354,7 +330,7 @@ with export_placeholder.container():
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
             df_detail.to_excel(writer, sheet_name='Part_Details', index=False)
-        st.download_button(label="💾 Excel Data", data=output.getvalue(), file_name="Capacity.xlsx", use_container_width=True)
+        st.download_button(label="💾 Excel Data", data=output.getvalue(), file_name=f"Capacity_{month_display}.xlsx", use_container_width=True)
         components.html("<button onclick='window.parent.print()' style='background:#0f172a; color:white; padding:8px; border-radius:6px; width:100%; border:none; cursor:pointer;'>🖨️ Print PDF</button>", height=50)
 
 # ==========================================
@@ -377,14 +353,14 @@ st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 kpi5.metric("📈 Overall Utilization", f"{overall_util:.1f}%")
 kpi6.metric("⚠️ Over Capacity Types", f"{over_cap_count} machines", delta="Action Required" if over_cap_count > 0 else "Optimal", delta_color="inverse")
-kpi7.metric("💰 Estimated Sales (Mth N)", f"฿ {total_sales_n:,.0f}")
+kpi7.metric("💰 Estimated Sales", f"฿ {total_sales_n:,.0f}")
 kpi8.metric("🗓️ Work Days", f"{int(work_days)} Days")
 st.divider()
 
 # ==========================================
 # 📊 2. Main Visualizations (Tabs)
 # ==========================================
-tab_util, tab_oee, tab_donut = st.tabs(["📊 Capacity Utilization", "⚡ Efficiency (OEE) Grouping", "🍩 Detailed Breakdown"])
+tab_util, tab_oee, tab_donut, tab_avail = st.tabs(["📊 Capacity Utilization", "⚡ Efficiency (OEE) Grouping", "🍩 Detailed Breakdown", "📋 สรุปพื้นที่ว่าง (Available Capacity)"])
 
 with tab_util:
     st.markdown("#### อัตราการใช้กำลังการผลิตเครื่องจักร (Utilization %)")
@@ -406,9 +382,7 @@ with tab_oee:
     st.markdown("#### ประสิทธิภาพเครื่องจักร OEE (แยกตามกลุ่มเครื่อง)")
     st.caption("เปรียบเทียบค่าความพร้อมการทำงาน (OEE%) ที่ตั้งไว้สำหรับเครื่องแต่ละประเภท")
     
-    # Sort specifically for this chart to show Highest OEE to Lowest
     cfg_oee = cfg.sort_values(by='OEE (%)', ascending=True)
-    
     fig_oee = go.Figure(go.Bar(
         x=cfg_oee['OEE (%)'], y=cfg_oee['Machine Type'], orientation='h',
         marker=dict(color=cfg_oee['OEE (%)'], colorscale='Teal', showscale=False),
@@ -449,17 +423,43 @@ with tab_donut:
                     fig2.update_layout(showlegend=False, margin=dict(t=5, b=5, l=5, r=5), height=140, paper_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig2, use_container_width=True, key=f"d_{data['Machine Type']}")
 
+with tab_avail:
+    st.markdown("#### 📋 สรุปพื้นที่ว่างรองรับงานใหม่ (Available Capacity Report)")
+    st.caption("ข้อมูลนี้ช่วยให้ฝ่ายขายหรือฝ่ายวางแผน ทราบว่าเครื่องจักรแต่ละประเภทเหลือพื้นที่รับ New Part หรือ Order แทรกได้อีกเท่าไหร่")
+    
+    df_avail = pd.DataFrame({
+        'Machine Type': cfg['Machine Type'],
+        'ตั้งเปิดใช้ (เครื่อง)': cfg['Usable Machines'],
+        'ใช้ไปจริง (เครื่อง)': cfg['Req_Machines'],
+        'ใช้ไป (%)': cfg['Utilization (%)'],
+        'เหลือว่าง (เครื่อง)': (cfg['Usable Machines'] - cfg['Req_Machines']).clip(lower=0),
+        'เหลือว่าง (%)': (100.0 - cfg['Utilization (%)']).clip(lower=0),
+        'รับงานเพิ่มได้อีก (ชั่วโมง)': (cfg['Available Hours'] - cfg['Req_Hours']).clip(lower=0)
+    })
+    df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
+    
+    def highlight_avail(row):
+        color = '#15803d' if row['เหลือว่าง (%)'] > 20 else ('#b91c1c' if row['เหลือว่าง (%)'] == 0 else '#0f172a')
+        return [f'color: {color}; font-weight: 600' if i >= 4 else '' for i in range(len(row))]
+
+    st.dataframe(
+        df_avail.style.format({
+            'ตั้งเปิดใช้ (เครื่อง)': '{:.0f}', 'ใช้ไปจริง (เครื่อง)': '{:.1f}', 'ใช้ไป (%)': '{:.1f}%',
+            'เหลือว่าง (เครื่อง)': '{:.1f}', 'เหลือว่าง (%)': '{:.1f}%', 'รับงานเพิ่มได้อีก (ชั่วโมง)': '{:,.0f} ชม.'
+        }).apply(highlight_avail, axis=1),
+        use_container_width=True, hide_index=True, height=450
+    )
+
 st.divider()
 
 # ==========================================
-# 🏆 3. Rankings & Analytics (NEW)
+# 🏆 3. Rankings & Analytics 
 # ==========================================
 st.markdown("### 🏆 จัดอันดับสถานะเครื่องจักร (Machine Rankings)")
 
-# Sort for Top/Bottom 5
 cfg_sorted_util = cfg[cfg['Available Hours'] > 0].sort_values(by='Utilization (%)', ascending=False)
-top_5_worst = cfg_sorted_util.head(5) # Top 5 ทำงานหนักสุด (Overloaded)
-top_5_best = cfg_sorted_util.tail(5).sort_values(by='Utilization (%)', ascending=True) # Top 5 ว่างงานสุด (Underutilized)
+top_5_worst = cfg_sorted_util.head(5) 
+top_5_best = cfg_sorted_util.tail(5).sort_values(by='Utilization (%)', ascending=True)
 
 col_rank1, col_rank2 = st.columns(2)
 
