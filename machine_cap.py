@@ -63,7 +63,7 @@ def gh_put_file(remote_path, content_bytes, message):
     except Exception as e: return False, str(e)
 
 # ==========================================
-# 🎨 PRO CSS Styling (Enterprise Look)
+# 🎨 PRO CSS Styling
 # ==========================================
 st.markdown("""
 <style>
@@ -93,8 +93,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# Data Processing
+# Data Processing (Including Spec Data)
 # ==========================================
+@st.cache_data
+def load_specs():
+    spec_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Curing Machine Data.xlsx')
+    if os.path.exists(spec_file):
+        try:
+            df = pd.read_excel(spec_file)
+            return df
+        except Exception:
+            pass
+    return pd.DataFrame()
+
 @st.cache_data
 def load_and_process(db_file, up_file, wip_reduction_pct):
     try:
@@ -104,15 +115,24 @@ def load_and_process(db_file, up_file, wip_reduction_pct):
         capacity = pd.read_excel(db_file, sheet_name='Capacity')
         mc_data = pd.read_excel(db_file, sheet_name='mc data')
 
-        # 📌 1. เพิ่มเครื่องจักร INJECT 2.5 L 700x700 COOL RUNNER VJ (5 เครื่อง)
-        new_machine_name = "INJECT 2.5 L 700x700 COOL RUNNER VJ"
-        if new_machine_name not in mc_data['Machine Type'].values:
-            new_row = pd.DataFrame([{
-                'Machine Type': new_machine_name, 
-                'จำนวนเครื่องทั้งหมด': 5, 
-                'จำนวนเครื่องที่ให้ใช้ได้': 5
-            }])
-            mc_data = pd.concat([mc_data, new_row], ignore_index=True)
+        machine_updates = {
+            "INJECT 1.6 L 500x600 HOT EM": 7, "INJ 2.5 L 500x600 200T EM": 2, "INJECT 1.6 L 500x600 COOL RUNNER VA": 9,
+            "INJECT 1.6 L 500x600 COOL RUNNER TMA": 5, "INJECT 1.6 L 600x600 COOL RUNNER VC": 10,
+            "INJECT 1.6 L 600x600 COOL RUNNER (Daylight 800-870 mm.)": 7, "INJECT 2.5 L 700x700 COOL RUNNER VJ": 5,
+            "INJ 350 T 700x700 COOL RUNNER": 3, "INJECT 0.8 L 450x510": 9, "PRESS 510X510": 4,
+            "VACUUM 700x700": 2, "VACUUM 510x510": 2, "INJECT 300T": 1, "INJECT 400T": 1
+        }
+        
+        for m_name, m_count in machine_updates.items():
+            matched = False
+            for existing_name in mc_data['Machine Type'].dropna().unique():
+                if str(existing_name).strip().upper() == str(m_name).strip().upper():
+                    mc_data.loc[mc_data['Machine Type'] == existing_name, 'จำนวนเครื่องทั้งหมด'] = m_count
+                    matched = True
+                    break
+            if not matched:
+                new_row = pd.DataFrame([{'Machine Type': m_name, 'จำนวนเครื่องทั้งหมด': m_count, 'จำนวนเครื่องที่ให้ใช้ได้': m_count}])
+                mc_data = pd.concat([mc_data, new_row], ignore_index=True)
 
         wip_fg['Material'] = wip_fg['Material'].astype(str).str.replace(r';A1$', '', regex=True).str.replace(r';A2$', '', regex=True)
         wip_agg = wip_fg.groupby('Material', as_index=False)['Unrestricted'].sum()
@@ -236,22 +256,46 @@ if not os.path.exists(db_file) or active_file is None:
 mach_summary, df_detail, total_sales_n, m_n_str, err = load_and_process(db_file, active_file, wip_reduction_pct)
 if err: st.error(err); st.stop()
 month_display = pd.to_datetime(m_n_str, format='%m.%Y').strftime('%b%y') if m_n_str else ""
+df_specs = load_specs()
 
 # ==========================================
-# Main Dashboard Header (Dynamic)
+# Main Dashboard Header (Dynamic & Pop-ups)
 # ==========================================
-col_header, col_export = st.columns([4, 1])
+col_header, col_spec, col_export = st.columns([2.5, 0.7, 0.7])
 with col_header:
-    st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Utilization <span style='color: #3b82f6; margin-left: 8px;'>Pro</span> <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='margin-bottom: 0px; display: flex; align-items: center;'>📊 Press Capacity Pro <span style='font-size: 16px; color: #0284c7; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; margin-left: 15px;'>🗓️ {month_display}</span></h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #64748b; font-size: 15px;'>ระบบวิเคราะห์และวางแผนกำลังการผลิตขั้นสูงสำหรับเครื่องจักร Press</p>", unsafe_allow_html=True)
+
+with col_spec:
+    st.write("")
+    with st.popover("📋 Machine Specs", use_container_width=True):
+        st.markdown("#### 📖 ข้อมูลจำเพาะเครื่องจักร (Machine Specs)")
+        if not df_specs.empty:
+            st.dataframe(df_specs, hide_index=True, use_container_width=True)
+        else:
+            st.warning("⚠️ ไม่พบไฟล์ 'Curing Machine Data.xlsx' กรุณานำไฟล์มาวางไว้ในระบบ")
 
 export_placeholder = col_export.empty()
 
 # ==========================================
-# Initialize Machine Settings
+# Initialize Machine Settings & Merge Specs
 # ==========================================
 cfg = mach_summary.copy()
 cfg['Hours/Shift'] = 7.0
+
+# 📌 รวมข้อมูล Spec เครื่องจักรเข้ากับตารางหลัก (เพื่อใช้ในการ Filter/Group by)
+if not df_specs.empty and 'Machine Type' in df_specs.columns:
+    df_specs['Machine Type'] = df_specs['Machine Type'].astype(str).str.strip().str.upper()
+    cfg['Machine Type_Match'] = cfg['Machine Type'].astype(str).str.strip().str.upper()
+    cfg = pd.merge(cfg, df_specs, left_on='Machine Type_Match', right_on='Machine Type', how='left', suffixes=('', '_spec'))
+    cfg = cfg.drop(columns=['Machine Type_Match', 'Machine Type_spec'], errors='ignore')
+
+# 📌 ตรวจสอบและสร้างคอลัมน์เผื่อไว้ กรณีไฟล์ Spec ไม่มีคอลัมน์ที่ต้องการ
+for col in ['Model', 'Volume CC', 'Pressure', 'PLATE']:
+    if col not in cfg.columns:
+        cfg[col] = 'N/A'
+    else:
+        cfg[col] = cfg[col].fillna('N/A').astype(str)
 
 def get_sort_priority(mt):
     mt_up = str(mt).upper()
@@ -269,10 +313,7 @@ if os.path.exists(settings_file):
         with open(settings_file, 'r', encoding='utf-8') as f: saved_settings = json.load(f)
     except: pass
 
-saved_oee = saved_settings.get('oee_dict', {})
-saved_use = saved_settings.get('use_dict', {})
-saved_shift = saved_settings.get('shift_dict', {})
-saved_ot = saved_settings.get('ot_dict', {})
+saved_oee, saved_use, saved_shift, saved_ot = saved_settings.get('oee_dict', {}), saved_settings.get('use_dict', {}), saved_settings.get('shift_dict', {}), saved_settings.get('ot_dict', {})
 
 for idx, row in cfg.iterrows():
     mt = str(row['Machine Type'])
@@ -326,11 +367,27 @@ cfg['Utilization (%)'] = np.where(cfg['Available Hours'] > 0, (cfg['Req_Hours'] 
 cfg['Req_Machines'] = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
 
 # ==========================================
+# 🎛️ DYNAMIC FILTER & GROUPING (NEW FEATURE)
+# ==========================================
+st.markdown("### 🔍 มุมมองข้อมูล (Data Perspective)")
+view_by = st.radio("เลือกจัดกลุ่มข้อมูลตาม:", ['Machine Type', 'Model', 'Volume CC', 'Pressure', 'PLATE'], horizontal=True)
+
+# แปลงตาราง cfg ให้จับกลุ่มตามสิ่งที่ User เลือก
+cfg_view = cfg.groupby(view_by, as_index=False).agg({
+    'Total Machines': 'sum',
+    'Usable Machines': 'sum',
+    'Req_Hours': 'sum',
+    'Available Hours': 'sum',
+    'Req_Machines': 'sum'
+})
+cfg_view['Utilization (%)'] = np.where(cfg_view['Available Hours'] > 0, (cfg_view['Req_Hours'] / cfg_view['Available Hours']) * 100.0, 0.0)
+
+# ==========================================
 # Export Button
 # ==========================================
 with export_placeholder.container():
     st.write("")
-    with st.popover("📥 Reports"):
+    with st.popover("📥 Reports", use_container_width=True):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             cfg.to_excel(writer, sheet_name='Machine_Summary', index=False)
@@ -341,11 +398,10 @@ with export_placeholder.container():
 # ==========================================
 # 📈 1. Executive Summary (KPIs)
 # ==========================================
-# 📌 อัปเดต Total Machines ให้ดึงจากข้อมูลจริงแทนการล็อคเลข 66
 total_machines_all = int(cfg['Total Machines'].sum())
 total_req, total_avail = cfg['Req_Hours'].sum(), cfg['Available Hours'].sum()
 overall_util = (total_req / total_avail) * 100 if total_avail > 0 else 0
-over_cap_count = len(cfg[cfg['Utilization (%)'] > 100])
+over_cap_count = len(cfg_view[cfg_view['Utilization (%)'] > 100])
 adj_mach_val = (cfg['Usable Machines'] * (cfg['Shifts/Day'] / 3.0)).sum()
 adj_mach_str = f"{adj_mach_val:.1f}".rstrip('0').rstrip('.')
 
@@ -358,7 +414,7 @@ kpi4.metric("⏱️ Total Req. Hours", f"{total_req:,.0f} hr")
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 kpi5, kpi6, kpi7, kpi8 = st.columns(4)
 kpi5.metric("📈 Overall Utilization", f"{overall_util:.1f}%")
-kpi6.metric("⚠️ Over Capacity Types", f"{over_cap_count} machines", delta="Action Required" if over_cap_count > 0 else "Optimal", delta_color="inverse")
+kpi6.metric(f"⚠️ Over Capacity ({view_by})", f"{over_cap_count} groups", delta="Action Required" if over_cap_count > 0 else "Optimal", delta_color="inverse")
 kpi7.metric("💰 Estimated Sales", f"฿ {total_sales_n:,.0f}")
 kpi8.metric("🗓️ Work Days", f"{int(work_days)} Days")
 st.divider()
@@ -366,16 +422,16 @@ st.divider()
 # ==========================================
 # 📊 2. Main Visualizations (Tabs)
 # ==========================================
-tab_util, tab_oee, tab_donut, tab_avail = st.tabs(["📊 Capacity Utilization", "⚡ Efficiency (OEE) Grouping", "🍩 Detailed Breakdown", "📋 สรุปพื้นที่ว่าง (Available Capacity)"])
+tab_util, tab_oee, tab_donut, tab_avail = st.tabs([f"📊 Capacity (by {view_by})", "⚡ Efficiency (OEE)", "🍩 Detailed Breakdown", "📋 สรุปพื้นที่ว่าง (Available Capacity)"])
 
 with tab_util:
-    st.markdown("#### อัตราการใช้กำลังการผลิตเครื่องจักร (Utilization %)")
+    st.markdown(f"#### อัตราการใช้กำลังการผลิต แบ่งตาม {view_by}")
     fig_bar = go.Figure()
-    bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg['Utilization (%)']]
+    bar_colors = ['#ef4444' if val > 100 else '#3b82f6' for val in cfg_view['Utilization (%)']]
     
     fig_bar.add_trace(go.Bar(
-        x=cfg['Machine Type'], y=cfg['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
-        text=cfg['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='outside', textfont=dict(color='#0f172a', size=12),
+        x=cfg_view[view_by], y=cfg_view['Utilization (%)'], marker_color=bar_colors, name="Utilization (%)",
+        text=cfg_view['Utilization (%)'].apply(lambda x: f'{x:.1f}%'), textposition='outside', textfont=dict(color='#0f172a', size=12),
         hovertemplate="<b>%{x}</b><br>Utilization: %{y:.1f}%<extra></extra>"
     ))
     fig_bar.add_hline(y=100, line_dash="dash", line_color="#ef4444", line_width=2, annotation_text="Maximum Capacity (100%)", annotation_font=dict(color="#ef4444", size=12))
@@ -385,14 +441,15 @@ with tab_util:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with tab_oee:
-    st.markdown("#### ประสิทธิภาพเครื่องจักร OEE (แยกตามกลุ่มเครื่อง)")
-    st.caption("เปรียบเทียบค่าความพร้อมการทำงาน (OEE%) ที่ตั้งไว้สำหรับเครื่องแต่ละประเภท")
+    st.markdown(f"#### ประสิทธิภาพเครื่องจักร OEE (เฉลี่ยตาม {view_by})")
     
-    cfg_oee = cfg.sort_values(by='OEE (%)', ascending=True)
+    # คำนวณ OEE เฉลี่ยตาม View ที่เลือก
+    cfg_oee_view = cfg.groupby(view_by, as_index=False).agg({'OEE (%)': 'mean'}).sort_values(by='OEE (%)', ascending=True)
+    
     fig_oee = go.Figure(go.Bar(
-        x=cfg_oee['OEE (%)'], y=cfg_oee['Machine Type'], orientation='h',
-        marker=dict(color=cfg_oee['OEE (%)'], colorscale='Teal', showscale=False),
-        text=cfg_oee['OEE (%)'].apply(lambda x: f'{x:.0f}%'), textposition='inside', textfont=dict(color='white', size=14)
+        x=cfg_oee_view['OEE (%)'], y=cfg_oee_view[view_by], orientation='h',
+        marker=dict(color=cfg_oee_view['OEE (%)'], colorscale='Teal', showscale=False),
+        text=cfg_oee_view['OEE (%)'].apply(lambda x: f'{x:.0f}%'), textposition='inside', textfont=dict(color='white', size=14)
     ))
     fig_oee.add_vline(x=85, line_dash="dot", line_color="#f59e0b", line_width=2, annotation_text="Target 85%", annotation_position="top right")
     fig_oee.update_layout(height=500, margin=dict(l=10, r=20, t=30, b=30), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(range=[0, 110], gridcolor='#e2e8f0'))
@@ -401,10 +458,10 @@ with tab_oee:
 with tab_donut:
     col_d1, col_d2 = st.columns([1, 3])
     with col_d1:
-        st.markdown("##### 🍩 Overall Mix")
-        selected_machines = st.multiselect("Filter Machines:", options=cfg['Machine Type'].tolist(), default=cfg['Machine Type'].tolist(), label_visibility="collapsed")
-        if selected_machines:
-            f_cfg = cfg[cfg['Machine Type'].isin(selected_machines)]
+        st.markdown(f"##### 🍩 Overall Mix ({view_by})")
+        selected_groups = st.multiselect("Filter:", options=cfg_view[view_by].tolist(), default=cfg_view[view_by].tolist(), label_visibility="collapsed")
+        if selected_groups:
+            f_cfg = cfg_view[cfg_view[view_by].isin(selected_groups)]
             f_util = (f_cfg['Req_Hours'].sum() / f_cfg['Available Hours'].sum() * 100) if f_cfg['Available Hours'].sum() > 0 else 0
             
             fig = go.Figure(data=[go.Pie(labels=['Used', 'Free'], values=[min(f_util, 100), max(100 - min(f_util, 100), 0)], hole=0.7, marker=dict(colors=["#ef4444" if f_util>100 else "#3b82f6", '#f1f5f9']), textinfo='none')])
@@ -415,66 +472,71 @@ with tab_donut:
     with col_d2:
         st.markdown("##### 🍩 Individual breakdown")
         num_cols = 4
-        rows = [cfg.iloc[i:i + num_cols] for i in range(0, len(cfg), num_cols)]
+        rows = [cfg_view.iloc[i:i + num_cols] for i in range(0, len(cfg_view), num_cols)]
         for row_df in rows:
             cols = st.columns(num_cols)
             for idx, (_, data) in enumerate(row_df.iterrows()):
                 with cols[idx]:
                     u_val = data['Utilization (%)']
-                    short_name = data['Machine Type'][:20] + ".." if len(data['Machine Type']) > 20 else data['Machine Type']
+                    short_name = str(data[view_by])[:20] + ".." if len(str(data[view_by])) > 20 else str(data[view_by])
                     st.markdown(f"<div style='text-align:center; font-size:12px; font-weight:600;'>{short_name}</div>", unsafe_allow_html=True)
                     
                     fig2 = go.Figure(data=[go.Pie(labels=['Used', 'Free'], values=[min(u_val, 100), max(100 - min(u_val, 100), 0)], hole=0.7, marker=dict(colors=["#ef4444" if u_val>100 else "#10b981", '#f1f5f9']), textinfo='none')])
                     fig2.add_annotation(text=f"<b>{u_val:.0f}%</b>", x=0.5, y=0.5, font_size=16, font_color="#0f172a", showarrow=False)
                     fig2.update_layout(showlegend=False, margin=dict(t=5, b=5, l=5, r=5), height=140, paper_bgcolor="rgba(0,0,0,0)")
-                    st.plotly_chart(fig2, use_container_width=True, key=f"d_{data['Machine Type']}")
+                    st.plotly_chart(fig2, use_container_width=True, key=f"d_{data[view_by]}")
 
 with tab_avail:
     col_title_avail, col_toggle = st.columns([3, 1])
     with col_title_avail:
-        st.markdown("#### 📋 สรุปพื้นที่ว่างรองรับงานใหม่ (Available Capacity Report)")
-        st.caption("กราฟและตารางเพื่อประเมินความสามารถในการรับ New Part หรือ Order แทรก")
-    
+        st.markdown(f"#### 📋 สรุปพื้นที่ว่างรองรับงานใหม่ (จัดกลุ่มตาม {view_by})")
     with col_toggle:
-        simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องเต็มสูบ (ตั้งเปิดใช้ = มีทั้งหมด)", value=False)
+        simulate_max = st.toggle("🚀 จำลองสถานการณ์: เดินเครื่องเต็มสูบ (มีเท่าไหร่ใช้หมด)", value=False)
     
-    mock_usable = pd.Series(cfg['Total Machines'] if simulate_max else cfg['Usable Machines'])
-    mock_avail_hrs = pd.Series(mock_usable * cfg['Capacity_Per_Machine'])
-    mock_util = pd.Series(np.where(mock_avail_hrs > 0, (cfg['Req_Hours'] / mock_avail_hrs) * 100.0, 0.0), index=cfg.index)
+    # คำนวณจำลองสเกลรายเครื่องก่อน แล้วค่อย Group by ตามที่เลือก
+    mock_usable = cfg['Total Machines'] if simulate_max else cfg['Usable Machines']
+    mock_avail_hrs = mock_usable * cfg['Capacity_Per_Machine']
+    mock_req_machines = np.where(cfg['Capacity_Per_Machine'] > 0, cfg['Req_Hours'] / cfg['Capacity_Per_Machine'], 0.0)
+
+    df_t4 = cfg.copy()
+    df_t4['Mock_Usable'], df_t4['Mock_Avail_Hrs'], df_t4['Mock_Req_Machines'] = mock_usable, mock_avail_hrs, mock_req_machines
+    
+    df_t4_view = df_t4.groupby(view_by, as_index=False).agg({
+        'Mock_Usable': 'sum', 'Mock_Req_Machines': 'sum', 'Mock_Avail_Hrs': 'sum', 'Req_Hours': 'sum'
+    })
+    df_t4_view['Mock_Util'] = np.where(df_t4_view['Mock_Avail_Hrs'] > 0, (df_t4_view['Req_Hours'] / df_t4_view['Mock_Avail_Hrs']) * 100.0, 0.0)
 
     df_avail = pd.DataFrame({
-        'Machine Type': cfg['Machine Type'],
-        'ตั้งเปิดใช้ (เครื่อง)': mock_usable,
-        'ใช้ไปจริง (เครื่อง)': cfg['Req_Machines'],
-        'ใช้ไป (%)': mock_util,
-        'เหลือว่าง (เครื่อง)': (mock_usable - cfg['Req_Machines']).clip(lower=0),
-        'เหลือว่าง (%)': (100.0 - mock_util).clip(lower=0),
-        'รับงานเพิ่มได้อีก (ชั่วโมง)': (mock_avail_hrs - cfg['Req_Hours']).clip(lower=0)
+        view_by: df_t4_view[view_by],
+        'ตั้งเปิดใช้ (เครื่อง)': df_t4_view['Mock_Usable'],
+        'ใช้ไปจริง (เครื่อง)': df_t4_view['Mock_Req_Machines'],
+        'ใช้ไป (%)': df_t4_view['Mock_Util'],
+        'เหลือว่าง (เครื่อง)': (df_t4_view['Mock_Usable'] - df_t4_view['Mock_Req_Machines']).clip(lower=0),
+        'เหลือว่าง (%)': (100.0 - df_t4_view['Mock_Util']).clip(lower=0),
+        'รับงานเพิ่มได้อีก (ชั่วโมง)': (df_t4_view['Mock_Avail_Hrs'] - df_t4_view['Req_Hours']).clip(lower=0)
     })
     df_avail = df_avail.sort_values(by='รับงานเพิ่มได้อีก (ชั่วโมง)', ascending=False)
     
     st.markdown("##### 📊 กราฟแสดงสัดส่วนเครื่องทั้งหมด (% เหลือใช้)")
-    
     fig_avail = make_subplots(specs=[[{"secondary_y": True}]])
     
     fig_avail.add_trace(go.Bar(
-        x=df_avail['Machine Type'], y=df_avail['ใช้ไปจริง (เครื่อง)'], 
+        x=df_avail[view_by], y=df_avail['ใช้ไปจริง (เครื่อง)'], 
         name='ใช้ไปแล้ว (เครื่อง)', marker_color='#3b82f6',
         text=df_avail['ใช้ไปจริง (เครื่อง)'].apply(lambda x: f'{x:.1f}'), textposition='inside',
         hovertemplate="<b>%{x}</b><br>ใช้ไปแล้ว: %{y:.1f} เครื่อง<extra></extra>"
     ), secondary_y=False)
     
     fig_avail.add_trace(go.Bar(
-        x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (เครื่อง)'], 
+        x=df_avail[view_by], y=df_avail['เหลือว่าง (เครื่อง)'], 
         name='เหลือว่าง (เครื่อง)', marker_color='#10b981',
         text=df_avail['เหลือว่าง (เครื่อง)'].apply(lambda x: f'{x:.1f}' if x >= 0.1 else ''), textposition='inside',
         hovertemplate="<b>%{x}</b><br>เหลือว่าง: %{y:.1f} เครื่อง<extra></extra>"
     ), secondary_y=False)
     
     fig_avail.add_trace(go.Scatter(
-        x=df_avail['Machine Type'], y=df_avail['เหลือว่าง (%)'],
-        name='% เหลือว่าง', mode='lines+markers',
-        line=dict(color='#f59e0b', width=3, shape='spline'),
+        x=df_avail[view_by], y=df_avail['เหลือว่าง (%)'],
+        name='% เหลือว่าง', mode='lines+markers', line=dict(color='#f59e0b', width=3, shape='spline'),
         marker=dict(size=8, symbol='circle', line=dict(width=1, color='white')),
         text=df_avail['เหลือว่าง (%)'].apply(lambda x: f'{x:.1f}%'), textposition='top center',
         hovertemplate="<b>%{x}</b><br>เหลือว่าง: %{y:.1f}%<extra></extra>"
@@ -483,10 +545,8 @@ with tab_avail:
     fig_avail.update_layout(
         barmode='stack', height=450, margin=dict(t=20, b=50, l=10, r=10),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
-        hovermode="x unified"
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1), hovermode="x unified"
     )
-    
     fig_avail.update_yaxes(title_text="จำนวนเครื่อง (Units)", gridcolor='#e2e8f0', secondary_y=False)
     fig_avail.update_yaxes(title_text="เปอร์เซ็นต์เหลือว่าง (%)", showgrid=False, secondary_y=True, range=[0, 110])
     
@@ -510,27 +570,23 @@ st.divider()
 # ==========================================
 # 🏆 3. Rankings & Analytics 
 # ==========================================
-st.markdown("### 🏆 จัดอันดับสถานะเครื่องจักร (Machine Rankings)")
+st.markdown(f"### 🏆 จัดอันดับสถานะกำลังผลิต (Rankings by {view_by})")
 
-cfg_sorted_util = cfg[cfg['Available Hours'] > 0].sort_values(by='Utilization (%)', ascending=False)
+cfg_sorted_util = cfg_view[cfg_view['Available Hours'] > 0].sort_values(by='Utilization (%)', ascending=False)
 top_5_worst = cfg_sorted_util.head(5) 
 top_5_best = cfg_sorted_util.tail(5).sort_values(by='Utilization (%)', ascending=True)
 
 col_rank1, col_rank2 = st.columns(2)
 
 with col_rank1:
-    st.markdown("<div style='background-color:#fee2e2; padding:10px; border-radius:8px;'><h4 style='color:#b91c1c; margin:0;'>🔴 Top 5 เครื่องที่ทำงานหนักที่สุด (Overloaded)</h4></div>", unsafe_allow_html=True)
-    st.caption("เครื่องจักรที่มีอัตรา Utilization สูงสุด (เสี่ยงคอขวด / ผลิตไม่ทัน)")
-    
-    fig_t5 = px.bar(top_5_worst, x='Utilization (%)', y='Machine Type', orientation='h', text_auto='.1f', color_discrete_sequence=['#ef4444'])
+    st.markdown("<div style='background-color:#fee2e2; padding:10px; border-radius:8px;'><h4 style='color:#b91c1c; margin:0;'>🔴 Top 5 ทำงานหนักที่สุด (Overloaded)</h4></div>", unsafe_allow_html=True)
+    fig_t5 = px.bar(top_5_worst, x='Utilization (%)', y=view_by, orientation='h', text_auto='.1f', color_discrete_sequence=['#ef4444'])
     fig_t5.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, margin=dict(l=10, r=20, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(gridcolor='#e2e8f0'))
     st.plotly_chart(fig_t5, use_container_width=True)
 
 with col_rank2:
-    st.markdown("<div style='background-color:#dcfce3; padding:10px; border-radius:8px;'><h4 style='color:#15803d; margin:0;'>🟢 Top 5 เครื่องที่ว่างงานที่สุด (Underutilized)</h4></div>", unsafe_allow_html=True)
-    st.caption("เครื่องจักรที่มีอัตรา Utilization ต่ำที่สุด (มีพื้นที่รองรับงานเพิ่มได้)")
-    
-    fig_b5 = px.bar(top_5_best, x='Utilization (%)', y='Machine Type', orientation='h', text_auto='.1f', color_discrete_sequence=['#10b981'])
+    st.markdown("<div style='background-color:#dcfce3; padding:10px; border-radius:8px;'><h4 style='color:#15803d; margin:0;'>🟢 Top 5 ว่างงานที่สุด (Underutilized)</h4></div>", unsafe_allow_html=True)
+    fig_b5 = px.bar(top_5_best, x='Utilization (%)', y=view_by, orientation='h', text_auto='.1f', color_discrete_sequence=['#10b981'])
     fig_b5.update_layout(yaxis={'categoryorder':'total descending'}, height=300, margin=dict(l=10, r=20, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(gridcolor='#e2e8f0', range=[0, 100]))
     st.plotly_chart(fig_b5, use_container_width=True)
 
@@ -542,7 +598,7 @@ st.divider()
 col_deep1, col_deep2 = st.columns(2)
 
 with col_deep1:
-    st.markdown("#### 📦 Top 5 Parts ที่ใช้เวลาผลิตสูงสุด (แยกตามเครื่อง)")
+    st.markdown("#### 📦 Top 5 Parts ที่ใช้เวลาผลิตสูงสุด")
     df_valid = df_detail[df_detail['Req_Hours'] > 0].copy()
     top_5_parts = df_valid.sort_values(['Machine Type', 'Req_Hours'], ascending=[True, False]).groupby('Machine Type').head(5)
     machine_types = sorted(top_5_parts['Machine Type'].unique(), key=get_sort_priority)
